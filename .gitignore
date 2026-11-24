@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+
+# 本地调试截图与临时输出
+shot-*.png
+mbti-grid-check.png
+edge-err.txt
+edge-out.txt
+test-photos/
+
+# 本地平台配置
+.workbuddy/
+*.genie
