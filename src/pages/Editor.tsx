@@ -22,6 +22,21 @@ import { withShareCode } from '../lib/share'
 import { downloadDataUrl, generateSharePoster } from '../lib/poster'
 import { cropAvatarDataUrl, makeSampleAvatarDataUrl } from '../lib/storage'
 import { useSceneSound } from '../lib/sound'
+import {
+  IconAutoMood,
+  IconChevronDown,
+  IconCircleFrame,
+  IconImage,
+  IconMoon,
+  IconPolaroid,
+  IconSliders,
+  IconSoundOff,
+  IconSoundOn,
+  IconSparkles,
+  IconSun,
+  IconSunset,
+  IconUpload,
+} from '../components/Icons'
 
 const DRAFT_KEY = 'card-draft-v1'
 
@@ -347,6 +362,7 @@ function Editor() {
   const [spec, setSpec] = useState<SceneSpec | null>(initialSetup.spec)
   const [view, setView] = useState<ViewPreset>('commercial')
   const [previewHour, setPreviewHour] = useState<number | undefined>(undefined)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const { enabled: soundOn, toggleSound, syncAmbient, stopAmbient } = useSceneSound()
   const [progress, setProgress] = useState<string | null>(null)
   const [posterBusy, setPosterBusy] = useState(false)
@@ -714,16 +730,32 @@ function Editor() {
 
                 <div className="section-title">选择场景模板（拍同款，轮廓固定）</div>
                 <div className="tpl-grid">
-                  {templatePresets.map((t, i) => (
-                    <button
-                      key={i}
-                      className={activeTemplate === i ? 'tpl-card active' : 'tpl-card'}
-                      onClick={() => selectTemplate(i)}
-                    >
-                      <span className="tpl-name">{t.label}</span>
-                      <span className="tpl-desc">{t.desc}</span>
-                    </button>
-                  ))}
+                  {templatePresets.map((t, i) => {
+                    const moodPreview = getMoodsForTemplate(t.id)[0]
+                    return (
+                      <button
+                        key={i}
+                        className={activeTemplate === i ? 'tpl-card active' : 'tpl-card'}
+                        onClick={() => selectTemplate(i)}
+                      >
+                        <span
+                          className="tpl-bar"
+                          style={{
+                            background: moodPreview
+                              ? `linear-gradient(90deg, ${moodPreview.swatch[0]}, ${moodPreview.swatch[1]})`
+                              : 'var(--accent)',
+                          }}
+                        />
+                        <div className="tpl-inner">
+                          <div className="tpl-title-row">
+                            {moodPreview && <span className="tpl-emoji">{moodPreview.emoji}</span>}
+                            <span className="tpl-name">{t.label}</span>
+                          </div>
+                          <span className="tpl-desc">{t.desc}</span>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
                 <button
                   type="button"
@@ -784,16 +816,19 @@ function Editor() {
                               }
                             }}
                           />
-                          📤 上传照片
+                          <IconUpload size={13} />
+                          <span>上传照片</span>
                         </label>
                         <button
                           type="button"
+                          className="btn-inline"
                           onClick={() => {
                             setForm((f) => ({ ...f, avatarUrl: makeSampleAvatarDataUrl() }))
                             setNotice({ kind: 'info', text: '已加载示例头像立牌，可切换圆框 / 拍立得相框。' })
                           }}
                         >
-                          ✨ 试示例照片
+                          <IconSparkles size={13} />
+                          <span>试示例照片</span>
                         </button>
                         {form.avatarUrl && (
                           <button type="button" onClick={() => setForm((f) => ({ ...f, avatarUrl: '' }))}>
@@ -804,17 +839,19 @@ function Editor() {
                       <div className="avatar-frames">
                         <button
                           type="button"
-                          className={form.avatarFrame === 'circle' ? 'frame-chip active' : 'frame-chip'}
+                          className={form.avatarFrame === 'circle' ? 'frame-chip btn-inline active' : 'frame-chip btn-inline'}
                           onClick={() => setForm((f) => ({ ...f, avatarFrame: 'circle' }))}
                         >
-                          ⭕ 金属圆框
+                          <IconCircleFrame size={13} />
+                          <span>金属圆框</span>
                         </button>
                         <button
                           type="button"
-                          className={form.avatarFrame === 'polaroid' ? 'frame-chip active' : 'frame-chip'}
+                          className={form.avatarFrame === 'polaroid' ? 'frame-chip btn-inline active' : 'frame-chip btn-inline'}
                           onClick={() => setForm((f) => ({ ...f, avatarFrame: 'polaroid' }))}
                         >
-                          📸 拍立得相框
+                          <IconPolaroid size={13} />
+                          <span>拍立得相框</span>
                         </button>
                       </div>
                     </div>
@@ -971,7 +1008,8 @@ function Editor() {
                           setSpec((s) => (s ? { ...s, autoMood: checked } : s))
                         }}
                       />
-                      <span>🌗 跟随现实时间自动昼夜切换</span>
+                      <IconAutoMood size={14} />
+                      <span>跟随现实时间自动昼夜切换</span>
                     </label>
                   </div>
                   <div className="auto-mood-sub">
@@ -982,33 +1020,36 @@ function Editor() {
                   <div className="auto-mood-sim">
                     <button
                       type="button"
-                      className={spec.autoMood && previewHour === 10 ? 'active' : ''}
+                      className={spec.autoMood && previewHour === 10 ? 'btn-inline active' : 'btn-inline'}
                       onClick={() => {
                         setSpec((s) => (s ? { ...s, autoMood: true } : s))
                         setPreviewHour(10)
                       }}
                     >
-                      ☀️ 白天
+                      <IconSun size={13} />
+                      <span>白天</span>
                     </button>
                     <button
                       type="button"
-                      className={spec.autoMood && previewHour === 18 ? 'active' : ''}
+                      className={spec.autoMood && previewHour === 18 ? 'btn-inline active' : 'btn-inline'}
                       onClick={() => {
                         setSpec((s) => (s ? { ...s, autoMood: true } : s))
                         setPreviewHour(18)
                       }}
                     >
-                      🌇 黄昏
+                      <IconSunset size={13} />
+                      <span>黄昏</span>
                     </button>
                     <button
                       type="button"
-                      className={spec.autoMood && previewHour === 22 ? 'active' : ''}
+                      className={spec.autoMood && previewHour === 22 ? 'btn-inline active' : 'btn-inline'}
                       onClick={() => {
                         setSpec((s) => (s ? { ...s, autoMood: true } : s))
                         setPreviewHour(22)
                       }}
                     >
-                      🌙 夜晚
+                      <IconMoon size={13} />
+                      <span>夜晚</span>
                     </button>
                     {spec.autoMood && previewHour !== undefined && (
                       <button type="button" onClick={() => setPreviewHour(undefined)}>
@@ -1018,7 +1059,7 @@ function Editor() {
                   </div>
                 </div>
 
-                <div className="section-title">✨ 氛围皮肤（手动固定一套）</div>
+                <div className="section-title">氛围皮肤（手动固定一套）</div>
                 <div className="mood-grid">
                   {getMoodsForTemplate(spec.template).map((m) => {
                     const active = !spec.autoMood && resolveSceneTheme(spec).mood.id === m.id
@@ -1056,7 +1097,7 @@ function Editor() {
                   })}
                 </div>
 
-                <div className="section-title" style={{ marginTop: 4 }}>🎨 自定义配色（可选）</div>
+                <div className="section-title" style={{ marginTop: 4 }}>自定义配色（可选）</div>
                 <div className="field">
                   <label>影棚背景色</label>
                   <div className="swatch-row">
@@ -1121,84 +1162,150 @@ function Editor() {
                   </div>
                 </div>
 
-                <div className="section-title" style={{ marginTop: 4 }}>微调场景（实时生效）</div>
-                <div className="field">
-                  <label>光照氛围</label>
-                  <select
-                    value={spec.environment.lighting.preset}
-                    onChange={(e) => patchEnv({ lighting: { ...spec.environment.lighting, preset: e.target.value as SceneSpec['environment']['lighting']['preset'] } })}
+                <div className="advanced-drawer">
+                  <button
+                    type="button"
+                    className={advancedOpen ? 'advanced-trigger open' : 'advanced-trigger'}
+                    onClick={() => setAdvancedOpen((v) => !v)}
                   >
-                    <option value="morning">清晨</option>
-                    <option value="noon">正午</option>
-                    <option value="golden_hour">黄金时刻</option>
-                    <option value="dusk">黄昏</option>
-                    <option value="overcast">阴天</option>
-                    <option value="night">夜晚 / 极夜</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>雾气浓度：{spec.environment.lighting.fog.toFixed(2)}</label>
-                  <input
-                    type="range" min={0} max={0.6} step={0.02}
-                    value={spec.environment.lighting.fog}
-                    onChange={(e) => patchEnv({ lighting: { ...spec.environment.lighting, fog: Number(e.target.value) } })}
-                  />
-                </div>
-                <div className="field">
-                  <label>
-                    {spec.template === 'city'
-                      ? '模块密度'
-                      : spec.template === 'coast'
-                        ? '椰林密度'
-                        : spec.template === 'sakura_garden'
-                          ? '樱花密度'
-                          : spec.template === 'snow_cabin'
-                            ? '雪松密度'
-                            : '植被密度'}
-                  </label>
-                  <select
-                    value={spec.environment.foliage.density}
-                    onChange={(e) => patchEnv({ foliage: { ...spec.environment.foliage, density: e.target.value as SceneSpec['environment']['foliage']['density'] } })}
-                  >
-                    <option value="low">稀疏</option>
-                    <option value="medium">适中</option>
-                    <option value="high">茂密</option>
-                  </select>
-                </div>
-                {spec.template !== 'city' && (
-                  <div className="field">
-                    <label>
-                      <input
-                        type="checkbox"
-                        style={{ width: 'auto' }}
-                        checked={spec.environment.water.enabled}
-                        onChange={(e) => patchEnv({ water: { ...spec.environment.water, enabled: e.target.checked } })}
-                      />{' '}
-                      {spec.template === 'coast'
-                        ? '显示大海'
-                        : spec.template === 'sakura_garden'
-                          ? '显示锦鲤池'
-                          : spec.template === 'snow_cabin'
-                            ? '显示冰湖'
-                            : '显示水面'}
-                    </label>
-                  </div>
-                )}
+                    <span className="trig-left">
+                      <IconSliders size={14} />
+                      <span>高级场景微调 & AI 定制</span>
+                    </span>
+                    <IconChevronDown size={15} className="chev" />
+                  </button>
+                  {advancedOpen && (
+                    <div className="advanced-body">
+                      <div className="field">
+                        <label>光照氛围</label>
+                        {spec.autoMood ? (
+                          <div className="auto-mood-sub">
+                            已由「自动昼夜切换」动态接管当前光照；如需手动指定，请先取消上方自动昼夜开关。
+                          </div>
+                        ) : (
+                          <div className="seg-group">
+                            {(
+                              [
+                                ['morning', '清晨'],
+                                ['noon', '正午'],
+                                ['golden_hour', '黄金时刻'],
+                                ['dusk', '黄昏'],
+                                ['overcast', '阴天'],
+                                ['night', '夜晚'],
+                              ] as const
+                            ).map(([presetVal, presetLabel]) => (
+                              <button
+                                key={presetVal}
+                                type="button"
+                                className={
+                                  spec.environment.lighting.preset === presetVal ? 'seg-btn active' : 'seg-btn'
+                                }
+                                onClick={() =>
+                                  patchEnv({
+                                    lighting: { ...spec.environment.lighting, preset: presetVal },
+                                  })
+                                }
+                              >
+                                {presetLabel}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-                <div className="section-title" style={{ marginTop: 8 }}>AI 灵感定制（可选）</div>
-                <div className="field">
-                  <label>描述你的想法，由 AI 重新规划地形与氛围</label>
-                  <textarea
-                    value={ideaText}
-                    maxLength={200}
-                    rows={2}
-                    placeholder='如："左边要一座小山，中间凹一片洼地，黄昏的感觉"'
-                    onChange={(e) => setIdeaText(e.target.value)}
-                  />
+                      <div className="field">
+                        <label>雾气浓度：{spec.environment.lighting.fog.toFixed(2)}</label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={0.6}
+                          step={0.02}
+                          value={spec.environment.lighting.fog}
+                          onChange={(e) =>
+                            patchEnv({
+                              lighting: { ...spec.environment.lighting, fog: Number(e.target.value) },
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="field">
+                        <label>
+                          {spec.template === 'city'
+                            ? '模块密度'
+                            : spec.template === 'coast'
+                              ? '椰林密度'
+                              : spec.template === 'sakura_garden'
+                                ? '樱花密度'
+                                : spec.template === 'snow_cabin'
+                                  ? '雪松密度'
+                                  : '植被密度'}
+                        </label>
+                        <div className="seg-group">
+                          {(
+                            [
+                              ['low', '稀疏'],
+                              ['medium', '适中'],
+                              ['high', '茂密'],
+                            ] as const
+                          ).map(([denVal, denLabel]) => (
+                            <button
+                              key={denVal}
+                              type="button"
+                              className={
+                                spec.environment.foliage.density === denVal ? 'seg-btn active' : 'seg-btn'
+                              }
+                              onClick={() =>
+                                patchEnv({
+                                  foliage: { ...spec.environment.foliage, density: denVal },
+                                })
+                              }
+                            >
+                              {denLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {spec.template !== 'city' && (
+                        <div className="field">
+                          <label>
+                            <input
+                              type="checkbox"
+                              style={{ width: 'auto' }}
+                              checked={spec.environment.water.enabled}
+                              onChange={(e) =>
+                                patchEnv({ water: { ...spec.environment.water, enabled: e.target.checked } })
+                              }
+                            />{' '}
+                            {spec.template === 'coast'
+                              ? '显示大海'
+                              : spec.template === 'sakura_garden'
+                                ? '显示锦鲤池'
+                                : spec.template === 'snow_cabin'
+                                  ? '显示冰湖'
+                                  : '显示水面'}
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="field">
+                        <label>AI 灵感定制（描述想法重新规划地形与氛围）</label>
+                        <textarea
+                          value={ideaText}
+                          maxLength={200}
+                          rows={2}
+                          placeholder='如："左边要一座小山，中间凹一片洼地，黄昏的感觉"'
+                          onChange={(e) => setIdeaText(e.target.value)}
+                        />
+                      </div>
+                      <button className="btn-inline" onClick={onGenerate} disabled={!!progress}>
+                        <IconSparkles size={14} />
+                        <span>{progress ? 'AI 生成中…' : 'AI 灵感生成场景'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button onClick={onGenerate} disabled={!!progress}>
-                  {progress ? 'AI 生成中…' : 'AI 灵感生成场景'}
-                </button>
               </>
             )}
           </div>
@@ -1223,27 +1330,31 @@ function Editor() {
           </div>
         </aside>
 
-        <main className="stage">
+        <main className={`stage ${resolvedTheme?.isDark ? 'stage-dark' : 'stage-light'}`}>
           {spec ? (
             <>
-              <div className="view-tabs">
+              <div className="view-tabs" aria-label="视角切换">
                 <button className={view === 'front' ? 'active' : ''} onClick={() => setView('front')}>正面</button>
                 <button className={view === 'back' ? 'active' : ''} onClick={() => setView('back')}>背面</button>
                 <button className={view === 'commercial' ? 'active' : ''} onClick={() => setView('commercial')}>自由视角</button>
+              </div>
+              <div className="stage-actions">
                 <button
                   type="button"
                   className={soundOn ? 'active' : ''}
                   title="开启/关闭当前微缩世界的环境氛围音与彩蛋音效"
                   onClick={() => resolvedTheme && toggleSound(spec.template, resolvedTheme.isDark)}
                 >
-                  {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+                  {soundOn ? <IconSoundOn size={14} /> : <IconSoundOff size={14} />}
+                  <span>氛围音</span>
                 </button>
                 <button
                   disabled={posterBusy}
                   title="将当前视角画面合成为竖版炫耀海报"
                   onClick={() => onDownloadPoster(!!publish)}
                 >
-                  {posterBusy ? '生成中…' : '🖼️ 存海报'}
+                  <IconImage size={14} />
+                  <span>{posterBusy ? '生成中…' : '存海报'}</span>
                 </button>
               </div>
               <div className="canvas-host" ref={stageHostRef}>

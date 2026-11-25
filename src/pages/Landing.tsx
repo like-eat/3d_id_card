@@ -5,6 +5,15 @@ import { getMoodSkin, getMoodsForTemplate, resolveSceneTheme } from '../contract
 import { makeSampleAvatarDataUrl } from '../lib/storage'
 import { useSceneSound } from '../lib/sound'
 import { useHashNavigate } from '../lib/nav'
+import {
+  IconAutoMood,
+  IconEye,
+  IconEyeOff,
+  IconFlip,
+  IconSoundOff,
+  IconSoundOn,
+  IconSparkles,
+} from '../components/Icons'
 
 // 演示模板：?tpl=0..4 可切换（默认晨雾森林），?mood=<id> 可切皮肤，?autoMood=1 自动昼夜，?bg=hex / ?tc=hex 可自定义配色
 const params = new URLSearchParams(location.search)
@@ -40,6 +49,7 @@ export function LandingPage() {
   const [tplIdx, setTplIdx] = useState(initialIdx)
   const [moodId, setMoodId] = useState(initialMood)
   const [autoMood, setAutoMood] = useState(autoMoodParam)
+  const [heroHidden, setHeroHidden] = useState(false)
   const [view, setView] = useState<ViewPreset>(initialView)
   const { enabled: soundOn, toggleSound, syncAmbient, stopAmbient } = useSceneSound()
 
@@ -90,7 +100,7 @@ export function LandingPage() {
   )
 
   return (
-    <div className="page">
+    <div className={`page landing-page ${resolvedTheme.isDark ? 'theme-dark' : 'theme-light'}`}>
       <header className="topbar">
         <div className="brand" onClick={() => go('/')}>
           <span className="dot" />
@@ -99,13 +109,15 @@ export function LandingPage() {
         <div className="topbar-actions">
           <button
             type="button"
-            className={soundOn ? 'sound-btn active' : 'sound-btn'}
+            className={soundOn ? 'sound-btn btn-inline active' : 'sound-btn btn-inline'}
             onClick={() => toggleSound(demoSpec.template, resolvedTheme.isDark)}
           >
-            {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+            {soundOn ? <IconSoundOn size={14} /> : <IconSoundOff size={14} />}
+            <span>氛围音</span>
           </button>
-          <button className="primary" onClick={() => go(editorQuery)}>
-            创建我的名片
+          <button className="primary btn-inline" onClick={() => go(editorQuery)}>
+            <IconSparkles size={14} />
+            <span>创建我的名片</span>
           </button>
         </div>
       </header>
@@ -120,31 +132,54 @@ export function LandingPage() {
             />
           ) : null}
         </div>
-        {!cleanParam && (
+        {!cleanParam && !heroHidden && (
           <div className="hero">
             <div className="hero-card">
-              <h1>
-                拍同款，
-                <br />
-                生成<em>写实微缩 3D 数字名片</em>
-              </h1>
+              <div className="hero-head">
+                <h1>
+                  拍同款，定制你的
+                  <br />
+                  <em>微缩 3D 数字名片</em>
+                </h1>
+                <button
+                  type="button"
+                  className="hero-collapse-btn"
+                  title="收起介绍卡片，纯净赏玩 3D 沙盘"
+                  onClick={() => setHeroHidden(true)}
+                >
+                  <IconEyeOff size={13} />
+                  <span>收起</span>
+                </button>
+              </div>
               <p className="sub">
-                从精调写实微缩沙盘模板中选择一款，搭配日夜氛围皮肤与个性化配色，换上你的姓名与链接。
-                正面是立体微缩世界，翻转背面呈现另一面世界与可扫码二维码。
+                挑一套写实微缩沙盘，自由切换日夜氛围与专属配色，放上照片立牌与社交链接，正面赏微缩世界、背面扫码直达。
               </p>
               <div className="actions">
                 <button className="primary" onClick={() => go(editorQuery)}>
-                  开始创建
+                  <IconSparkles size={15} />
+                  <span>开始创建</span>
                 </button>
                 <button onClick={() => setView((v) => (v === 'back' ? 'commercial' : 'back'))}>
-                  {view === 'back' ? '翻回正面沙盘' : '翻看背面名片'}
+                  <IconFlip size={14} />
+                  <span>{view === 'back' ? '翻回正面' : '翻看背面'}</span>
                 </button>
                 <button onClick={() => go(demoCardQuery)}>
-                  👀 看成品名片
+                  <IconEye size={14} />
+                  <span>看成品页</span>
                 </button>
               </div>
             </div>
           </div>
+        )}
+        {!cleanParam && heroHidden && (
+          <button
+            type="button"
+            className="hero-restore-btn"
+            onClick={() => setHeroHidden(false)}
+          >
+            <IconEye size={14} />
+            <span>展开介绍</span>
+          </button>
         )}
         <div className="landing-dock">
           <div className="mood-pills" aria-label="氛围皮肤快速切换">
@@ -169,7 +204,8 @@ export function LandingPage() {
               onClick={() => setAutoMood((v) => !v)}
               title="按当前时刻自动切换白天 / 黄昏 / 夜晚皮肤"
             >
-              <span>🌗 自动昼夜</span>
+              <IconAutoMood size={13} />
+              <span>自动昼夜</span>
             </button>
           </div>
           <div className="dock-pills">

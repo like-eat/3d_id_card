@@ -21,6 +21,16 @@ import { withShareCode } from '../lib/share'
 import { useSceneSound } from '../lib/sound'
 import { useHashNavigate } from '../lib/nav'
 import { downloadVCard } from '../lib/vcard'
+import {
+  IconAutoMood,
+  IconContact,
+  IconCopy,
+  IconExternalLink,
+  IconFlip,
+  IconSoundOff,
+  IconSoundOn,
+  IconSparkles,
+} from '../components/Icons'
 
 function makeDemoCard(
   id: number,
@@ -369,7 +379,7 @@ export function CardViewerPage({ slug }: { slug: string }) {
             )}
             {sceneTheme.isAutoMood && (
               <div className="acc-pill auto-mood-badge" style={{ borderColor: sceneTheme.accent }}>
-                <span>🌗</span>
+                <IconAutoMood size={13} />
                 <span>实时昼夜 · {sceneTheme.timeBandLabel}</span>
               </div>
             )}
@@ -393,7 +403,8 @@ export function CardViewerPage({ slug }: { slug: string }) {
           )
         }
       >
-        ✨ 做一张同款
+        <IconSparkles size={14} />
+        <span>做一张同款</span>
       </button>
 
       {/* 右上角快捷交互：氛围音、翻面 & 存通讯录 */}
@@ -403,7 +414,8 @@ export function CardViewerPage({ slug }: { slug: string }) {
           className={soundOn ? 'action-pill active' : 'action-pill'}
           onClick={() => toggleSound(parsed.spec.template, isDark)}
         >
-          {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+          {soundOn ? <IconSoundOn size={14} /> : <IconSoundOff size={14} />}
+          <span>氛围音</span>
         </button>
         {hasWebgl && (
           <button
@@ -414,7 +426,8 @@ export function CardViewerPage({ slug }: { slug: string }) {
               setHintShown(false)
             }}
           >
-            {view === 'back' ? '🔄 翻回正面' : '🔄 翻看背面'}
+            <IconFlip size={14} />
+            <span>{view === 'back' ? '翻回正面' : '翻看背面'}</span>
           </button>
         )}
         <button
@@ -425,7 +438,8 @@ export function CardViewerPage({ slug }: { slug: string }) {
             showToast('已生成通讯录名片 (.vcf)，可导入手机联系人')
           }}
         >
-          📇 存通讯录
+          <IconContact size={14} />
+          <span>存通讯录</span>
         </button>
       </div>
 
@@ -461,12 +475,14 @@ export function CardViewerPage({ slug }: { slug: string }) {
             className="link-chip"
             onClick={() => copyWechat(l.url.trim())}
           >
-            微信 · 复制
+            <IconCopy size={13} />
+            <span>微信 · 复制</span>
           </button>
         ))}
         {safeLinks.map((l, i) => (
           <a key={i} href={l.url} target="_blank" rel="noopener noreferrer">
-            {l.label}
+            <span>{l.label}</span>
+            <IconExternalLink size={12} />
           </a>
         ))}
         {safeLinks.length === 0 && profile.website && /^(https?:\/\/)/i.test(profile.website) && (
