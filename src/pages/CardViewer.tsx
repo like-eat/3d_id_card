@@ -18,6 +18,7 @@ import { SceneErrorBoundary } from '../scene-engine/SceneErrorBoundary'
 import { makeFrontTexture, type CardProfile } from '../scene-engine/cardTexture'
 import { errorMessage } from '../lib/cloud'
 import { withShareCode } from '../lib/share'
+import { useSceneSound } from '../lib/sound'
 import { useHashNavigate } from '../lib/nav'
 import { downloadVCard } from '../lib/vcard'
 
@@ -214,7 +215,9 @@ export function CardViewerPage({ slug }: { slug: string }) {
   const [view, setView] = useState<ViewPreset>('commercial')
   const [hintShown, setHintShown] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
+  const [, setClockTick] = useState(0)
   const toastTimerRef = useRef<number | null>(null)
+  const { enabled: soundOn, toggleSound, syncAmbient, stopAmbient } = useSceneSound()
 
   function showToast(msg: string) {
     setToast(msg)
@@ -223,21 +226,30 @@ export function CardViewerPage({ slug }: { slug: string }) {
   }
 
   useEffect(() => {
+    const interval = window.setInterval(() => setClockTick((n) => n + 1), 60000)
     return () => {
+      window.clearInterval(interval)
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current)
+      stopAmbient()
     }
-  }, [])
+  }, [stopAmbient])
 
   useEffect(() => {
     const demo = DEMO_CARDS[slug]
     if (demo) {
       const qIdx = location.hash.indexOf('?')
-      const moodQuery = qIdx >= 0 ? new URLSearchParams(location.hash.slice(qIdx + 1)).get('mood') : null
-      if (moodQuery && demo.published_spec) {
+      const qParams = qIdx >= 0 ? new URLSearchParams(location.hash.slice(qIdx + 1)) : null
+      const moodQuery = qParams?.get('mood') ?? null
+      const autoMoodQuery = qParams?.get('autoMood') === '1'
+      if ((moodQuery || autoMoodQuery) && demo.published_spec) {
         const nextSpec = JSON.parse(JSON.stringify(demo.published_spec)) as typeof demo.published_spec
-        const skin = getMoodSkin(nextSpec.template, moodQuery)
-        nextSpec.mood = skin.id
-        nextSpec.environment.lighting.preset = skin.lightingPreset
+        if (autoMoodQuery) {
+          nextSpec.autoMood = true
+        } else if (moodQuery) {
+          const skin = getMoodSkin(nextSpec.template, moodQuery)
+          nextSpec.mood = skin.id
+          nextSpec.environment.lighting.preset = skin.lightingPreset
+        }
         setCard({ ...demo, scene_spec: nextSpec, published_spec: nextSpec })
       } else {
         setCard(demo)
@@ -274,6 +286,15 @@ export function CardViewerPage({ slug }: { slug: string }) {
       showToast(`请长按复制微信号：${wechatId}`)
     }
   }
+
+  const parsedSpec = card?.published_spec ? parseSceneSpec(card.published_spec).spec : null
+  const activeTpl = parsedSpec?.template ?? 'mountain_forest'
+  const activeDark = parsedSpec ? resolveSceneTheme(parsedSpec).isDark : false
+
+  useEffect(() => {
+    if (!card || !parsedSpec) return
+    syncAmbient(activeTpl, activeDark)
+  }, [card, parsedSpec, activeTpl, activeDark, soundOn, syncAmbient])
 
   if (loading) {
     return <div className="viewer"><div className="loading-screen">正在加载名片…</div></div>
@@ -332,7 +353,7 @@ export function CardViewerPage({ slug }: { slug: string }) {
             <p>{profile.title}</p>
           </div>
         </div>
-        {(mbtiInfo || accInfo) && (
+        {(mbtiInfo || accInfo || sceneTheme.isAutoMood) && (
           <div className="viewer-badges">
             {mbtiInfo && (
               <div className="mbti-pill" style={{ borderColor: mbtiInfo.color }}>
@@ -346,6 +367,12 @@ export function CardViewerPage({ slug }: { slug: string }) {
                 <span>{accInfo.label}</span>
               </div>
             )}
+            {sceneTheme.isAutoMood && (
+              <div className="acc-pill auto-mood-badge" style={{ borderColor: sceneTheme.accent }}>
+                <span>🌗</span>
+                <span>实时昼夜 · {sceneTheme.timeBandLabel}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -355,14 +382,29 @@ export function CardViewerPage({ slug }: { slug: string }) {
         type="button"
         className="viewer-remake"
         onClick={() =>
-          go(`/editor?tpl=${tplIdx}${parsed.spec.mood ? `&mood=${encodeURIComponent(parsed.spec.mood)}` : ''}`)
+          go(
+            `/editor?tpl=${tplIdx}${
+              parsed.spec.autoMood
+                ? '&autoMood=1'
+                : parsed.spec.mood
+                  ? `&mood=${encodeURIComponent(parsed.spec.mood)}`
+                  : ''
+            }`,
+          )
         }
       >
         ✨ 做一张同款
       </button>
 
-      {/* 右上角快捷交互：一键翻面 & 存通讯录 */}
+      {/* 右上角快捷交互：氛围音、翻面 & 存通讯录 */}
       <div className="viewer-actions">
+        <button
+          type="button"
+          className={soundOn ? 'action-pill active' : 'action-pill'}
+          onClick={() => toggleSound(parsed.spec.template, isDark)}
+        >
+          {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+        </button>
         {hasWebgl && (
           <button
             type="button"
@@ -397,6 +439,7 @@ export function CardViewerPage({ slug }: { slug: string }) {
               profile={cardProfile}
               view={view}
               qrText={publicUrl}
+              showGuide={view !== 'back'}
               onCardClick={(side) => {
                 setView(side === 'back' ? 'back' : 'front')
                 setHintShown(false)

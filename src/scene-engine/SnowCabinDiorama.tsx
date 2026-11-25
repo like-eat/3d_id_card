@@ -7,7 +7,8 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 import {
   fbm,
   makeCabinWallTexture,
@@ -200,6 +201,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const burstItems = useMemo(() => Array.from({ length: 12 }, (_, i) => i), [])
   useEffect(() => () => setPointerCursor(false), [])
 
+  const { markDiscovered } = useEasterEggGuide()
   const moodId = resolveSceneTheme(spec).mood.id
   const isAurora = moodId === 'snow_aurora'
   const isDusk = moodId === 'snow_dusk'
@@ -273,6 +275,8 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
               if (!isTapEvent(e)) return
               tapTimeRef.current = -1
               setWarmId((n) => n + 1)
+              markDiscovered('landmark')
+              playEasterEggSfx('cabin')
             }
           : undefined
       }
@@ -424,6 +428,13 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
             </mesh>
           ))}
         </group>
+      )}
+      {side === 1 && (
+        <InteractiveHotspot
+          guideKey="landmark"
+          accent="#ffb863"
+          position={[0.04, -0.02, 0.5]}
+        />
       )}
       {side === 1 && (
         <SpeechBubble3D
@@ -589,6 +600,7 @@ function FrozenLake({ spec }: { spec: SceneSpec }) {
     return new THREE.ShapeGeometry(shape, 24)
   }, [])
 
+  const { markDiscovered } = useEasterEggGuide()
   const moodId = resolveSceneTheme(spec).mood.id
   const isAurora = moodId === 'snow_aurora'
   const isDusk = moodId === 'snow_dusk'

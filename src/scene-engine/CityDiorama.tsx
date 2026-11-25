@@ -7,7 +7,8 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 import {
   makeCircuitBoardTextures,
   makeLightDotTexture,
@@ -92,6 +93,7 @@ function QuantumCoreAssembly({
   const particlesRef = useRef<THREE.InstancedMesh>(null)
   const shockwaveRef = useRef<THREE.Mesh>(null)
   const coreLightRef = useRef<THREE.PointLight>(null)
+  const { markDiscovered } = useEasterEggGuide()
   const [chargeId, setChargeId] = useState(0)
   const tapTimeRef = useRef(-99)
   const phaseRef = useRef(0)
@@ -177,6 +179,8 @@ function QuantumCoreAssembly({
               if (!isTapEvent(e)) return
               tapTimeRef.current = -1
               setChargeId((n) => n + 1)
+              markDiscovered('landmark')
+              playEasterEggSfx('core')
             }
           : undefined
       }
@@ -279,6 +283,13 @@ function QuantumCoreAssembly({
         <ringGeometry args={[0.18, 0.24, 48]} />
         <meshBasicMaterial color={accent} transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
+      {interactive && (
+        <InteractiveHotspot
+          guideKey="landmark"
+          accent={accent}
+          position={[0, 0, 0.64]}
+        />
+      )}
       {interactive && (
         <SpeechBubble3D
           text="⚡ 量子核芯 · 能量满载"

@@ -1,6 +1,101 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as THREE from 'three'
+
+interface GuideContextValue {
+  showGuide: boolean
+  discovered: ReadonlySet<string>
+  markDiscovered: (key: string) => void
+}
+
+const EasterEggGuideContext = createContext<GuideContextValue>({
+  showGuide: false,
+  discovered: new Set<string>(),
+  markDiscovered: () => {},
+})
+
+export function EasterEggGuideProvider({
+  showGuide,
+  children,
+}: {
+  showGuide: boolean
+  children: ReactNode
+}) {
+  const [discovered, setDiscovered] = useState<Set<string>>(() => new Set())
+  const markDiscovered = useCallback((key: string) => {
+    setDiscovered((prev) => {
+      if (prev.has(key)) return prev
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+  }, [])
+
+  const value = useMemo(() => ({ showGuide, discovered, markDiscovered }), [showGuide, discovered, markDiscovered])
+  return <EasterEggGuideContext.Provider value={value}>{children}</EasterEggGuideContext.Provider>
+}
+
+export function useEasterEggGuide() {
+  return useContext(EasterEggGuideContext)
+}
+
+function makeHotspotTexture(accent: string): THREE.CanvasTexture {
+  const s = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = s
+  canvas.height = s
+  const ctx = canvas.getContext('2d')!
+  const grad = ctx.createRadialGradient(s / 2, s / 2, 4, s / 2, s / 2, s / 2 - 4)
+  grad.addColorStop(0, '#ffffff')
+  grad.addColorStop(0.28, accent)
+  grad.addColorStop(0.65, `${accent}66`)
+  grad.addColorStop(1, `${accent}00`)
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, s, s)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+/** 可点击彩蛋呼吸引导光点（首次访问显示，点击对应物体后自动消失） */
+export function InteractiveHotspot({
+  position,
+  accent = '#ffffff',
+  guideKey,
+}: {
+  position: [number, number, number]
+  accent?: string
+  guideKey: string
+}) {
+  const { showGuide, discovered } = useEasterEggGuide()
+  const spriteRef = useRef<THREE.Sprite>(null)
+  const matRef = useRef<THREE.SpriteMaterial>(null)
+  const tex = useMemo(() => makeHotspotTexture(accent), [accent])
+  useEffect(() => () => tex.dispose(), [tex])
+
+  const visible = showGuide && !discovered.has(guideKey)
+
+  useFrame(({ clock }) => {
+    if (!visible || !spriteRef.current || !matRef.current) return
+    const pulse = (Math.sin(clock.elapsedTime * 3.4) + 1) * 0.5
+    const s = 0.14 + pulse * 0.08
+    spriteRef.current.scale.set(s, s, 1)
+    matRef.current.opacity = 0.55 + pulse * 0.38
+  })
+
+  if (!visible) return null
+
+  return (
+    <sprite
+      ref={spriteRef}
+      position={position}
+      renderOrder={15}
+      raycast={() => null}
+    >
+      <spriteMaterial ref={matRef} map={tex} transparent depthWrite={false} depthTest={false} />
+    </sprite>
+  )
+}
 
 /** 过滤拖拽旋转时的误触，仅短按点击才算有效彩蛋点击 */
 export function isTapEvent(e: { delta?: number; stopPropagation: () => void }): boolean {
@@ -16,7 +111,7 @@ export function setPointerCursor(on: boolean) {
 }
 
 function makeBubbleTexture(text: string, accent: string): THREE.CanvasTexture {
-  const w = 512
+  const w = 620
   const h = 152
   const canvas = document.createElement('canvas')
   canvas.width = w
@@ -24,10 +119,10 @@ function makeBubbleTexture(text: string, accent: string): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, w, h)
 
-  const label = (text || '你好！').slice(0, 24)
-  ctx.font = '700 32px "PingFang SC", "Microsoft YaHei", "Segoe UI Emoji", sans-serif'
+  const label = (text || '你好！').slice(0, 26)
+  ctx.font = '700 30px "PingFang SC", "Microsoft YaHei", "Segoe UI Emoji", sans-serif'
   const measured = ctx.measureText(label).width
-  const boxW = Math.min(w - 24, Math.max(190, measured + 58))
+  const boxW = Math.min(w - 24, Math.max(200, measured + 60))
   const boxX = (w - boxW) / 2
   const boxY = 12
   const boxH = 104
@@ -78,12 +173,14 @@ export function SpeechBubble3D({
   triggerId,
   position,
   scale = 1,
+  duration = 2.6,
 }: {
   text: string
   accent?: string
   triggerId: number
   position: [number, number, number]
   scale?: number
+  duration?: number
 }) {
   const spriteRef = useRef<THREE.Sprite>(null)
   const matRef = useRef<THREE.SpriteMaterial>(null)
@@ -109,7 +206,7 @@ export function SpeechBubble3D({
     }
 
     const elapsed = clock.elapsedTime - startClockRef.current
-    const total = 2.6
+    const total = duration
     if (elapsed > total) {
       sp.visible = false
       return
@@ -124,10 +221,11 @@ export function SpeechBubble3D({
       pop = 1.0 + Math.sin(((elapsed - 0.2) / 0.14) * Math.PI) * 0.08
     }
 
-    const fade = elapsed > 2.15 ? Math.max(0, 1 - (elapsed - 2.15) / (total - 2.15)) : 1
+    const fadeStart = Math.max(0.5, total - 0.45)
+    const fade = elapsed > fadeStart ? Math.max(0, 1 - (elapsed - fadeStart) / (total - fadeStart)) : 1
     mat.opacity = fade
     sp.position.set(position[0], position[1], position[2] + Math.min(0.08, elapsed * 0.05))
-    sp.scale.set(1.02 * scale * pop, 0.31 * scale * pop, 1)
+    sp.scale.set(1.22 * scale * pop, 0.31 * scale * pop, 1)
   })
 
   return (

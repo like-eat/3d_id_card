@@ -7,7 +7,8 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 import {
   fbm,
   makeLakeReflectionSkyTexture,
@@ -491,6 +492,7 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }, [trunks, cardsPerTree, side])
 
+  const { markDiscovered } = useEasterEggGuide()
   const moodId = resolveSceneTheme(spec).mood.id
   const isNight = moodId === 'sakura_night'
   const isSunset = moodId === 'sakura_sunset'
@@ -505,6 +507,8 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
                 if (!isTapEvent(e)) return
                 burstTimeRef.current = -1
                 setBurstId((n) => n + 1)
+                markDiscovered('landmark')
+                playEasterEggSfx('sakura')
               }
             : undefined
         }
@@ -553,6 +557,13 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
         </instancedMesh>
       </group>
       {side === 1 && <SakuraBurstPetals triggerId={burstId} spec={spec} />}
+      {side === 1 && (
+        <InteractiveHotspot
+          guideKey="landmark"
+          accent="#ff8fb8"
+          position={[-0.72, 0.36, THIN_T / 2 + 0.68]}
+        />
+      )}
       {side === 1 && (
         <SpeechBubble3D
           text="🌸 樱吹雪 · 好运降临"
@@ -803,6 +814,7 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
         if (!isTapEvent(e)) return
         tapTimeRef.current = -1
         setRippleId((n) => n + 1)
+        playEasterEggSfx('koi')
       }}
       onPointerOver={(e) => {
         e.stopPropagation()

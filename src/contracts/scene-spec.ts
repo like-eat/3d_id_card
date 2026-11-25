@@ -76,6 +76,7 @@ export const sceneSpecSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   template: z.enum(TEMPLATES),
   mood: z.string().max(32).optional(),
+  autoMood: z.boolean().optional(),
   customBg: hexColor.optional(),
   customTextColor: hexColor.optional(),
   palette: paletteSchema,

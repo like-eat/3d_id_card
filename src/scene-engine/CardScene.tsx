@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import type { SceneSpec } from '../contracts/scene-spec'
 import { resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
+import { EasterEggGuideProvider } from './SpeechBubble3D'
 import { ForestDioramaCard } from './ForestDiorama'
 import { CoastDioramaCard } from './CoastDiorama'
 import { CityDioramaCard } from './CityDiorama'
@@ -143,6 +144,7 @@ function SceneContent({
   view,
   quality,
   qrText,
+  hourOverride,
   onSculpt,
 }: {
   spec: SceneSpec
@@ -150,12 +152,26 @@ function SceneContent({
   view: ViewPreset
   quality: Quality
   qrText: string
+  hourOverride?: number
   onSculpt?: (x: number, y: number) => void
 }) {
-  const theme = resolveSceneTheme(spec)
+  const theme = resolveSceneTheme(spec, hourOverride)
+  // 当自动昼夜启用时，把当前计算出的 mood/lighting 同步进传给子沙盘的 spec，确保所有地标着色一致
+  const effectiveSpec = useMemo<SceneSpec>(() => {
+    if (!spec.autoMood) return spec
+    return {
+      ...spec,
+      mood: theme.mood.id,
+      environment: {
+        ...spec.environment,
+        lighting: { ...spec.environment.lighting, preset: theme.mood.lightingPreset },
+      },
+    }
+  }, [spec, theme.mood.id, theme.mood.lightingPreset])
+
   const moodCfg = theme.mood.lightingCfg
-  const manualOverride = spec.environment.lighting.preset !== theme.mood.lightingPreset
-  const presetLight = LIGHTING_CFG[spec.environment.lighting.preset] ?? LIGHTING_CFG.morning
+  const manualOverride = !spec.autoMood && spec.environment.lighting.preset !== theme.mood.lightingPreset
+  const presetLight = LIGHTING_CFG[effectiveSpec.environment.lighting.preset] ?? LIGHTING_CFG.morning
   const light = manualOverride
     ? {
         ...moodCfg,
@@ -235,7 +251,7 @@ function SceneContent({
         <group ref={group} rotation={[-Math.PI / 2, 0, 0]}>
           {tpl === 'mountain_forest' && (
             <ForestDioramaCard
-              spec={spec}
+              spec={effectiveSpec}
               profile={profile}
               quality={quality}
               qrText={qrText}
@@ -244,7 +260,7 @@ function SceneContent({
           )}
           {tpl === 'coast' && (
             <CoastDioramaCard
-              spec={spec}
+              spec={effectiveSpec}
               profile={profile}
               quality={quality}
               qrText={qrText}
@@ -253,7 +269,7 @@ function SceneContent({
           )}
           {tpl === 'city' && (
             <CityDioramaCard
-              spec={spec}
+              spec={effectiveSpec}
               profile={profile}
               quality={quality}
               qrText={qrText}
@@ -262,7 +278,7 @@ function SceneContent({
           )}
           {tpl === 'sakura_garden' && (
             <SakuraDioramaCard
-              spec={spec}
+              spec={effectiveSpec}
               profile={profile}
               quality={quality}
               qrText={qrText}
@@ -271,7 +287,7 @@ function SceneContent({
           )}
           {tpl === 'snow_cabin' && (
             <SnowCabinDioramaCard
-              spec={spec}
+              spec={effectiveSpec}
               profile={profile}
               quality={quality}
               qrText={qrText}
@@ -280,7 +296,7 @@ function SceneContent({
           )}
         </group>
 
-        <CameraRig view={view} spec={spec} />
+        <CameraRig view={view} spec={effectiveSpec} />
       </Suspense>
     </>
   )
@@ -291,6 +307,8 @@ export function CardScene({
   profile,
   view = 'commercial',
   qrText = 'https://3d.card',
+  hourOverride,
+  showGuide = false,
   onCardClick,
   onSculpt,
 }: {
@@ -298,6 +316,8 @@ export function CardScene({
   profile: CardProfile
   view?: ViewPreset
   qrText?: string
+  hourOverride?: number
+  showGuide?: boolean
   onCardClick?: (side: 'front' | 'back') => void
   onSculpt?: (x: number, y: number) => void
 }) {
@@ -330,7 +350,17 @@ export function CardScene({
       }}
       onPointerMissed={() => onCardClick?.('front')}
     >
-      <SceneContent spec={spec} profile={profile} view={view} quality={quality} qrText={qrText} onSculpt={onSculpt} />
+      <EasterEggGuideProvider showGuide={showGuide}>
+        <SceneContent
+          spec={spec}
+          profile={profile}
+          view={view}
+          quality={quality}
+          qrText={qrText}
+          hourOverride={hourOverride}
+          onSculpt={onSculpt}
+        />
+      </EasterEggGuideProvider>
     </Canvas>
   )
 }

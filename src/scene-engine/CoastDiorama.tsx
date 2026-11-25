@@ -7,7 +7,8 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 import {
   fbm,
   makeFlowerSpriteTexture,
@@ -275,6 +276,7 @@ function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   useEffect(() => () => canopyTex.dispose(), [canopyTex])
   useEffect(() => () => setPointerCursor(false), [])
 
+  const { markDiscovered } = useEasterEggGuide()
   const umbrellaSpinRef = useRef<THREE.Group>(null)
   const sparkleGroupRef = useRef<THREE.Group>(null)
   const [chillId, setChillId] = useState(0)
@@ -329,6 +331,8 @@ function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
               if (!isTapEvent(e)) return
               tapTimeRef.current = -1
               setChillId((n) => n + 1)
+              markDiscovered('landmark')
+              playEasterEggSfx('beach')
             }
           : undefined
       }
@@ -361,6 +365,13 @@ function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
             </mesh>
           ))}
         </group>
+      )}
+      {side === 1 && (
+        <InteractiveHotspot
+          guideKey="landmark"
+          accent="#38bdf8"
+          position={[0, -0.04, 0.52]}
+        />
       )}
       {side === 1 && (
         <SpeechBubble3D

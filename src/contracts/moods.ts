@@ -432,6 +432,46 @@ export function getMoodSkin(tpl: TemplateId, moodId?: string): MoodSkin {
   return list[0] ?? MOOD_LIST[0]
 }
 
+const AUTO_MOOD_MAP: Record<TemplateId, { day: string; dusk: string; night: string }> = {
+  mountain_forest: { day: 'forest_morning', dusk: 'forest_autumn', night: 'forest_firefly' },
+  coast: { day: 'coast_day', dusk: 'coast_sunset', night: 'coast_moonbay' },
+  city: { day: 'tech_cyan', dusk: 'tech_gold', night: 'tech_cyber' },
+  sakura_garden: { day: 'sakura_day', dusk: 'sakura_sunset', night: 'sakura_night' },
+  snow_cabin: { day: 'snow_day', dusk: 'snow_dusk', night: 'snow_aurora' },
+}
+
+/** 从 URL 查询串或 Hash 参数中读取 ?hour=0..23 模拟时刻 */
+export function getSimulatedHour(): number | undefined {
+  if (typeof location === 'undefined') return undefined
+  const qIdx = location.hash.indexOf('?')
+  const hashParams = new URLSearchParams(qIdx >= 0 ? location.hash.slice(qIdx + 1) : '')
+  const searchParams = new URLSearchParams(location.search)
+  const raw = hashParams.get('hour') ?? searchParams.get('hour')
+  if (raw == null || raw === '') return undefined
+  const n = Number(raw)
+  return Number.isInteger(n) && n >= 0 && n <= 23 ? n : undefined
+}
+
+export type TimeBand = 'day' | 'dusk' | 'night'
+
+export function getTimeBand(hour?: number): TimeBand {
+  const h = typeof hour === 'number' && !Number.isNaN(hour) ? hour : new Date().getHours()
+  if (h >= 6 && h <= 16) return 'day'
+  if (h >= 17 && h <= 19) return 'dusk'
+  return 'night'
+}
+
+export function getTimeBandLabel(hour?: number): '白天' | '黄昏' | '夜晚' {
+  const band = getTimeBand(hour)
+  return band === 'day' ? '白天' : band === 'dusk' ? '黄昏' : '夜晚'
+}
+
+export function getAutoMoodForTemplate(tpl: TemplateId, hour?: number): MoodSkin {
+  const band = getTimeBand(hour ?? getSimulatedHour())
+  const targetId = AUTO_MOOD_MAP[tpl]?.[band]
+  return getMoodSkin(tpl, targetId)
+}
+
 export function isDarkHex(hex: string): boolean {
   const clean = hex.replace('#', '')
   if (clean.length !== 6) return false
@@ -450,10 +490,16 @@ export interface ResolvedSceneTheme {
   customTextColor?: string
   accent: string
   secondaryAccent: string
+  isAutoMood: boolean
+  timeBandLabel: '白天' | '黄昏' | '夜晚'
 }
 
-export function resolveSceneTheme(spec: SceneSpec): ResolvedSceneTheme {
-  const mood = getMoodSkin(spec.template, spec.mood)
+export function resolveSceneTheme(spec: SceneSpec, hourOverride?: number): ResolvedSceneTheme {
+  const activeHour = hourOverride ?? getSimulatedHour()
+  const isAutoMood = Boolean(spec.autoMood)
+  const mood = isAutoMood
+    ? getAutoMoodForTemplate(spec.template, activeHour)
+    : getMoodSkin(spec.template, spec.mood)
   const bgColor = spec.customBg || mood.studioBg
   const isDark = isDarkHex(bgColor)
   return {
@@ -463,6 +509,8 @@ export function resolveSceneTheme(spec: SceneSpec): ResolvedSceneTheme {
     customTextColor: spec.customTextColor || undefined,
     accent: mood.accent,
     secondaryAccent: mood.secondaryAccent,
+    isAutoMood,
+    timeBandLabel: getTimeBandLabel(activeHour),
   }
 }
 

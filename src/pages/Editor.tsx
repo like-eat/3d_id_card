@@ -21,6 +21,7 @@ import { errorMessage, withRetry } from '../lib/cloud'
 import { withShareCode } from '../lib/share'
 import { downloadDataUrl, generateSharePoster } from '../lib/poster'
 import { cropAvatarDataUrl, makeSampleAvatarDataUrl } from '../lib/storage'
+import { useSceneSound } from '../lib/sound'
 
 const DRAFT_KEY = 'card-draft-v1'
 
@@ -88,7 +89,7 @@ function loadDraft(): DraftForm | null {
 }
 
 /** 从 hash（如 #/editor?tpl=2&mood=snow_aurora）或 search 中读取初始模板与皮肤 */
-function readInitParams(): { tplIdx: number; moodId: string | null } {
+function readInitParams(): { tplIdx: number; moodId: string | null; autoMood: boolean } {
   const qIdx = location.hash.indexOf('?')
   const hashParams = new URLSearchParams(qIdx >= 0 ? location.hash.slice(qIdx + 1) : '')
   const searchParams = new URLSearchParams(location.search)
@@ -96,13 +97,16 @@ function readInitParams(): { tplIdx: number; moodId: string | null } {
   const n = rawTpl == null ? 0 : Number(rawTpl)
   const tplIdx = Number.isInteger(n) && n >= 0 && n < templatePresets.length ? n : 0
   const moodId = hashParams.get('mood') ?? searchParams.get('mood')
-  return { tplIdx, moodId }
+  const autoMood = (hashParams.get('autoMood') ?? searchParams.get('autoMood')) === '1'
+  return { tplIdx, moodId, autoMood }
 }
 
 function makeInitialSpec(): { tplIdx: number; spec: SceneSpec } {
-  const { tplIdx, moodId } = readInitParams()
+  const { tplIdx, moodId, autoMood } = readInitParams()
   const base = cloneSpec(templatePresets[tplIdx].make())
-  if (moodId) {
+  if (autoMood) {
+    base.autoMood = true
+  } else if (moodId) {
     const skin = getMoodSkin(base.template, moodId)
     base.mood = skin.id
     base.environment.lighting = { ...base.environment.lighting, preset: skin.lightingPreset }
@@ -342,6 +346,8 @@ function Editor() {
   const [activeTemplate, setActiveTemplate] = useState(initialSetup.tplIdx)
   const [spec, setSpec] = useState<SceneSpec | null>(initialSetup.spec)
   const [view, setView] = useState<ViewPreset>('commercial')
+  const [previewHour, setPreviewHour] = useState<number | undefined>(undefined)
+  const { enabled: soundOn, toggleSound, syncAmbient, stopAmbient } = useSceneSound()
   const [progress, setProgress] = useState<string | null>(null)
   const [posterBusy, setPosterBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null)
@@ -363,6 +369,18 @@ function Editor() {
       // ignore storage quota errors on large cropped avatars
     }
   }, [form])
+
+  const resolvedTheme = useMemo(
+    () => (spec ? resolveSceneTheme(spec, previewHour) : null),
+    [spec, previewHour],
+  )
+
+  useEffect(() => {
+    if (!spec || !resolvedTheme) return
+    syncAmbient(spec.template, resolvedTheme.isDark)
+  }, [spec, resolvedTheme, soundOn, syncAmbient])
+
+  useEffect(() => () => stopAmbient(), [stopAmbient])
 
   // 仅在已登录时拉取账号下的名片草稿
   const [recentCards, setRecentCards] = useState<CardRow[]>([])
@@ -941,20 +959,81 @@ function Editor() {
 
             {activeTab === 'style' && spec && (
               <>
-                <div className="section-title">✨ 氛围皮肤（一键切换昼夜与风格）</div>
+                <div className={spec.autoMood ? 'auto-mood-card active' : 'auto-mood-card'}>
+                  <div className="auto-mood-head">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!spec.autoMood}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          if (!checked) setPreviewHour(undefined)
+                          setSpec((s) => (s ? { ...s, autoMood: checked } : s))
+                        }}
+                      />
+                      <span>🌗 跟随现实时间自动昼夜切换</span>
+                    </label>
+                  </div>
+                  <div className="auto-mood-sub">
+                    {spec.autoMood && resolvedTheme
+                      ? `当前（${resolvedTheme.timeBandLabel}）自动匹配：${resolvedTheme.mood.emoji} ${resolvedTheme.mood.label}`
+                      : '开启后将根据访客打开时间，自动匹配白天 / 黄昏 / 夜晚皮肤'}
+                  </div>
+                  <div className="auto-mood-sim">
+                    <button
+                      type="button"
+                      className={spec.autoMood && previewHour === 10 ? 'active' : ''}
+                      onClick={() => {
+                        setSpec((s) => (s ? { ...s, autoMood: true } : s))
+                        setPreviewHour(10)
+                      }}
+                    >
+                      ☀️ 白天
+                    </button>
+                    <button
+                      type="button"
+                      className={spec.autoMood && previewHour === 18 ? 'active' : ''}
+                      onClick={() => {
+                        setSpec((s) => (s ? { ...s, autoMood: true } : s))
+                        setPreviewHour(18)
+                      }}
+                    >
+                      🌇 黄昏
+                    </button>
+                    <button
+                      type="button"
+                      className={spec.autoMood && previewHour === 22 ? 'active' : ''}
+                      onClick={() => {
+                        setSpec((s) => (s ? { ...s, autoMood: true } : s))
+                        setPreviewHour(22)
+                      }}
+                    >
+                      🌙 夜晚
+                    </button>
+                    {spec.autoMood && previewHour !== undefined && (
+                      <button type="button" onClick={() => setPreviewHour(undefined)}>
+                        回到真实时间
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="section-title">✨ 氛围皮肤（手动固定一套）</div>
                 <div className="mood-grid">
                   {getMoodsForTemplate(spec.template).map((m) => {
-                    const active = resolveSceneTheme(spec).mood.id === m.id
+                    const active = !spec.autoMood && resolveSceneTheme(spec).mood.id === m.id
                     return (
                       <button
                         key={m.id}
                         type="button"
                         className={active ? 'mood-card active' : 'mood-card'}
-                        onClick={() =>
+                        onClick={() => {
+                          setPreviewHour(undefined)
                           setSpec((s) =>
                             s
                               ? {
                                   ...s,
+                                  autoMood: false,
                                   mood: m.id,
                                   customBg: undefined,
                                   environment: {
@@ -964,7 +1043,7 @@ function Editor() {
                                 }
                               : s,
                           )
-                        }
+                        }}
                       >
                         <span
                           className="mood-swatch"
@@ -1152,6 +1231,14 @@ function Editor() {
                 <button className={view === 'back' ? 'active' : ''} onClick={() => setView('back')}>背面</button>
                 <button className={view === 'commercial' ? 'active' : ''} onClick={() => setView('commercial')}>自由视角</button>
                 <button
+                  type="button"
+                  className={soundOn ? 'active' : ''}
+                  title="开启/关闭当前微缩世界的环境氛围音与彩蛋音效"
+                  onClick={() => resolvedTheme && toggleSound(spec.template, resolvedTheme.isDark)}
+                >
+                  {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+                </button>
+                <button
                   disabled={posterBusy}
                   title="将当前视角画面合成为竖版炫耀海报"
                   onClick={() => onDownloadPoster(!!publish)}
@@ -1176,6 +1263,8 @@ function Editor() {
                       spec={spec}
                       profile={profileForPreview}
                       view={view}
+                      hourOverride={previewHour}
+                      showGuide={view !== 'back'}
                       qrText={publish?.url || 'https://3d.card'}
                     />
                   </SceneErrorBoundary>

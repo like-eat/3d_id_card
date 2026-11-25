@@ -2,7 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getAccessoryInfo } from '../contracts/accessories'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx, type SfxKind } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 
 const ACCESSORY_QUOTES: Record<string, string[]> = {
   cat: ['喵~ 很高兴认识你！', '摸摸头，今天也要开心呀', '正在打盹…点我干嘛喵'],
@@ -814,6 +815,7 @@ export function MicroAccessory({
   rotZ?: number
 }) {
   const info = getAccessoryInfo(accessory)
+  const { markDiscovered } = useEasterEggGuide()
   const [tapTrigger, setTapTrigger] = useState(0)
   const animRef = useRef<THREE.Group>(null)
   const tapTimeRef = useRef(-99)
@@ -879,6 +881,8 @@ export function MicroAccessory({
         if (!isTapEvent(e)) return
         tapTimeRef.current = -1
         setTapTrigger((n) => n + 1)
+        markDiscovered('accessory')
+        playEasterEggSfx(info.id as SfxKind)
       }}
       onPointerOver={(e) => {
         e.stopPropagation()
@@ -899,6 +903,11 @@ export function MicroAccessory({
         {info.id === 'easel' && <MiniEasel burstTrigger={tapTrigger} />}
         {info.id === 'rocket' && <MiniRocket burstTrigger={tapTrigger} />}
       </group>
+      <InteractiveHotspot
+        guideKey="accessory"
+        accent={info.accent}
+        position={[0, 0, 0.34]}
+      />
       <SpeechBubble3D
         text={bubbleText}
         accent={info.accent}

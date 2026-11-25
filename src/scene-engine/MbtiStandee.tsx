@@ -2,7 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getMbtiInfo, getMbtiQuote } from '../contracts/mbti'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 
 function isSafeAvatarSrc(src?: string): src is string {
   if (!src) return false
@@ -272,6 +273,7 @@ function StandeeInner({
   badgeColor,
   caption,
   bubbleText,
+  introBubbleText,
   position,
   scale,
   rotZ,
@@ -284,6 +286,7 @@ function StandeeInner({
   badgeColor: string
   caption: string
   bubbleText: string
+  introBubbleText: string
   position: [number, number, number]
   scale: number
   rotZ: number
@@ -291,9 +294,19 @@ function StandeeInner({
   const badgeTex = useMemo(() => makeStandeeBadgeTexture(badgeLabel, badgeColor), [badgeLabel, badgeColor])
   useEffect(() => () => badgeTex.dispose(), [badgeTex])
 
+  const { showGuide, markDiscovered } = useEasterEggGuide()
   const bodyRef = useRef<THREE.Group>(null)
   const tapClockRef = useRef<number | null>(null)
   const [tapTrigger, setTapTrigger] = useState(0)
+  const [introTrigger, setIntroTrigger] = useState(0)
+
+  useEffect(() => {
+    if (!showGuide || tapTrigger > 0) return
+    const timer = window.setTimeout(() => {
+      setIntroTrigger((n) => (n === 0 ? 1 : n))
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [showGuide, tapTrigger])
 
   useFrame(({ clock }) => {
     const grp = bodyRef.current
@@ -328,6 +341,8 @@ function StandeeInner({
           if (!isTapEvent(e)) return
           tapClockRef.current = null
           setTapTrigger((n) => n + 1)
+          markDiscovered('standee')
+          playEasterEggSfx('standee')
         }}
       >
         {/* 微缩圆台底座 */}
@@ -361,9 +376,10 @@ function StandeeInner({
       </group>
 
       <SpeechBubble3D
-        text={bubbleText}
+        text={tapTrigger > 0 ? bubbleText : introBubbleText}
         accent={badgeColor}
-        triggerId={tapTrigger}
+        triggerId={tapTrigger > 0 ? tapTrigger : introTrigger}
+        duration={tapTrigger > 0 ? 2.6 : 4.2}
         position={[0, 0, 0.68]}
         scale={0.95}
       />
@@ -406,6 +422,8 @@ export function MbtiStandee({
       ? getMbtiQuote(info.code)
       : `👋 你好，我是 ${name || '创作者'}`
 
+  const introBubbleText = greeting?.trim() || '👋 嗨！点点场景里的风景或小宠物看看 ✨'
+
   return (
     <StandeeInner
       mbtiCode={info?.code}
@@ -416,6 +434,7 @@ export function MbtiStandee({
       badgeColor={badgeColor}
       caption={caption}
       bubbleText={bubbleText}
+      introBubbleText={introBubbleText}
       position={position}
       scale={scale}
       rotZ={rotZ}

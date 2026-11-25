@@ -7,7 +7,8 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
-import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+import { playEasterEggSfx } from '../lib/sound'
+import { InteractiveHotspot, isTapEvent, setPointerCursor, SpeechBubble3D, useEasterEggGuide } from './SpeechBubble3D'
 import {
   fbm,
   makeFlowerSpriteTexture,
@@ -503,6 +504,7 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
   const matRef = useRef<THREE.ShaderMaterial>(null)
   const rippleRef = useRef<THREE.Mesh>(null)
   const dustRef = useRef<THREE.Group>(null)
+  const { markDiscovered } = useEasterEggGuide()
   const [rippleId, setRippleId] = useState(0)
   const tapTimeRef = useRef(-99)
   const skyTex = useMemo(() => makeLakeReflectionSkyTexture(), [])
@@ -594,6 +596,8 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
         if (!isTapEvent(e)) return
         tapTimeRef.current = -1
         setRippleId((n) => n + 1)
+        markDiscovered('landmark')
+        playEasterEggSfx('lake')
       }}
       onPointerOver={(e) => {
         e.stopPropagation()
@@ -676,6 +680,11 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
           </mesh>
         ))}
       </group>
+      <InteractiveHotspot
+        guideKey="landmark"
+        accent="#4ade80"
+        position={[0, 0, 0.24]}
+      />
       <SpeechBubble3D
         text="🌲 听见晨雾与风的声音"
         accent="#3b825e"

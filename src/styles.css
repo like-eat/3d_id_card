@@ -999,3 +999,82 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   flex: none;
 }
+
+/* ---------- 自动昼夜切换 & 氛围音开关样式 ---------- */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sound-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.sound-btn.active,
+.viewer-actions .action-pill.active {
+  border-color: var(--accent);
+  background: rgba(111, 195, 160, 0.22);
+  color: #ffffff;
+}
+.auto-mood-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.auto-mood-card.active {
+  border-color: var(--accent);
+  background: rgba(111, 195, 160, 0.11);
+}
+.auto-mood-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.auto-mood-head label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.auto-mood-head input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--accent);
+}
+.auto-mood-sub {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.auto-mood-sim {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.auto-mood-sim button {
+  padding: 3px 9px;
+  font-size: 11.5px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+}
+.auto-mood-sim button.active {
+  border-color: var(--accent);
+  background: rgba(111, 195, 160, 0.2);
+  color: var(--text);
+  font-weight: 600;
+}

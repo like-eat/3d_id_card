@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CardScene, hasWebGL, type ViewPreset } from '../scene-engine/CardScene'
 import { cloneSpec, templatePresets } from '../contracts/scene-spec'
-import { getMoodSkin, getMoodsForTemplate } from '../contracts/moods'
+import { getMoodSkin, getMoodsForTemplate, resolveSceneTheme } from '../contracts/moods'
 import { makeSampleAvatarDataUrl } from '../lib/storage'
+import { useSceneSound } from '../lib/sound'
 import { useHashNavigate } from '../lib/nav'
 
-// 演示模板：?tpl=0..4 可切换（默认晨雾森林），?mood=<id> 可切皮肤，?bg=hex / ?tc=hex 可自定义配色
+// 演示模板：?tpl=0..4 可切换（默认晨雾森林），?mood=<id> 可切皮肤，?autoMood=1 自动昼夜，?bg=hex / ?tc=hex 可自定义配色
 const params = new URLSearchParams(location.search)
 const tplParam = Number(params.get('tpl') ?? '-1')
 const initialIdx = Number.isInteger(tplParam) && tplParam >= 0 && tplParam < templatePresets.length ? tplParam : 0
@@ -13,6 +14,8 @@ const viewParam = params.get('view')
 const initialView: ViewPreset =
   viewParam === 'back' || viewParam === 'front' || viewParam === 'free' || viewParam === 'side' ? viewParam : 'commercial'
 const cleanParam = params.get('clean') === '1'
+const guideParam = params.get('guide') === '1'
+const autoMoodParam = params.get('autoMood') === '1'
 const mbtiParam = params.get('mbti') ?? 'ENFP'
 const accParam = params.get('acc')
 const demoAvatarParam = params.get('demoAvatar')
@@ -36,7 +39,9 @@ export function LandingPage() {
   const go = useHashNavigate()
   const [tplIdx, setTplIdx] = useState(initialIdx)
   const [moodId, setMoodId] = useState(initialMood)
+  const [autoMood, setAutoMood] = useState(autoMoodParam)
   const [view, setView] = useState<ViewPreset>(initialView)
+  const { enabled: soundOn, toggleSound, syncAmbient, stopAmbient } = useSceneSound()
 
   const currentTpl = templatePresets[tplIdx]
   const moodOptions = useMemo(() => getMoodsForTemplate(currentTpl.id), [currentTpl.id])
@@ -44,6 +49,7 @@ export function LandingPage() {
 
   const demoSpec = useMemo(() => {
     const s = cloneSpec(currentTpl.make())
+    s.autoMood = autoMood
     s.mood = activeMood.id
     s.environment.lighting = { ...s.environment.lighting, preset: activeMood.lightingPreset }
     if (tplIdx === initialIdx) {
@@ -51,7 +57,18 @@ export function LandingPage() {
       if (initialTc) s.customTextColor = initialTc
     }
     return s
-  }, [currentTpl, activeMood, tplIdx])
+  }, [currentTpl, activeMood, autoMood, tplIdx])
+
+  const resolvedTheme = useMemo(() => resolveSceneTheme(demoSpec), [demoSpec])
+
+  useEffect(() => {
+    syncAmbient(demoSpec.template, resolvedTheme.isDark)
+  }, [demoSpec.template, resolvedTheme.isDark, soundOn, syncAmbient])
+
+  useEffect(() => () => stopAmbient(), [stopAmbient])
+
+  const editorQuery = autoMood ? `/editor?tpl=${tplIdx}&autoMood=1` : `/editor?tpl=${tplIdx}&mood=${activeMood.id}`
+  const demoCardQuery = `/card/${DEMO_SLUGS[tplIdx] ?? 'demo-forest'}${autoMood ? '?autoMood=1' : `?mood=${activeMood.id}`}`
 
   const demoAvatarUrl = useMemo(
     () => (demoAvatarParam === 'circle' || demoAvatarParam === 'polaroid' ? makeSampleAvatarDataUrl() : undefined),
@@ -79,14 +96,28 @@ export function LandingPage() {
           <span className="dot" />
           3D 名片
         </div>
-        <button className="primary" onClick={() => go(`/editor?tpl=${tplIdx}&mood=${activeMood.id}`)}>
-          创建我的名片
-        </button>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className={soundOn ? 'sound-btn active' : 'sound-btn'}
+            onClick={() => toggleSound(demoSpec.template, resolvedTheme.isDark)}
+          >
+            {soundOn ? '🔊 氛围音' : '🔇 氛围音'}
+          </button>
+          <button className="primary" onClick={() => go(editorQuery)}>
+            创建我的名片
+          </button>
+        </div>
       </header>
       <main className="landing">
         <div className="demo-canvas">
           {hasWebGL() ? (
-            <CardScene spec={demoSpec} profile={demoProfile} view={view} />
+            <CardScene
+              spec={demoSpec}
+              profile={demoProfile}
+              view={view}
+              showGuide={!cleanParam || guideParam}
+            />
           ) : null}
         </div>
         {!cleanParam && (
@@ -102,13 +133,13 @@ export function LandingPage() {
                 正面是立体微缩世界，翻转背面呈现另一面世界与可扫码二维码。
               </p>
               <div className="actions">
-                <button className="primary" onClick={() => go(`/editor?tpl=${tplIdx}&mood=${activeMood.id}`)}>
+                <button className="primary" onClick={() => go(editorQuery)}>
                   开始创建
                 </button>
                 <button onClick={() => setView((v) => (v === 'back' ? 'commercial' : 'back'))}>
                   {view === 'back' ? '翻回正面沙盘' : '翻看背面名片'}
                 </button>
-                <button onClick={() => go(`/card/${DEMO_SLUGS[tplIdx] ?? 'demo-forest'}?mood=${activeMood.id}`)}>
+                <button onClick={() => go(demoCardQuery)}>
                   👀 看成品名片
                 </button>
               </div>
@@ -120,8 +151,11 @@ export function LandingPage() {
             {moodOptions.map((m) => (
               <button
                 key={m.id}
-                className={activeMood.id === m.id ? 'mood-pill active' : 'mood-pill'}
-                onClick={() => setMoodId(m.id)}
+                className={!autoMood && activeMood.id === m.id ? 'mood-pill active' : 'mood-pill'}
+                onClick={() => {
+                  setAutoMood(false)
+                  setMoodId(m.id)
+                }}
               >
                 <span
                   className="mood-dot"
@@ -130,6 +164,13 @@ export function LandingPage() {
                 <span>{m.emoji} {m.label}</span>
               </button>
             ))}
+            <button
+              className={autoMood ? 'mood-pill active' : 'mood-pill'}
+              onClick={() => setAutoMood((v) => !v)}
+              title="按当前时刻自动切换白天 / 黄昏 / 夜晚皮肤"
+            >
+              <span>🌗 自动昼夜</span>
+            </button>
           </div>
           <div className="dock-pills">
             {templatePresets.map((t, i) => (
