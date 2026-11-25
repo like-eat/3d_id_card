@@ -3,6 +3,7 @@ import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { ForestDioramaCard } from './ForestDiorama'
 import { CoastDioramaCard } from './CoastDiorama'
@@ -151,13 +152,27 @@ function SceneContent({
   qrText: string
   onSculpt?: (x: number, y: number) => void
 }) {
-  const light = LIGHTING_CFG[spec.environment.lighting.preset] ?? LIGHTING_CFG.morning
+  const theme = resolveSceneTheme(spec)
+  const moodCfg = theme.mood.lightingCfg
+  const manualOverride = spec.environment.lighting.preset !== theme.mood.lightingPreset
+  const presetLight = LIGHTING_CFG[spec.environment.lighting.preset] ?? LIGHTING_CFG.morning
+  const light = manualOverride
+    ? {
+        ...moodCfg,
+        sun: presetLight.sun,
+        sunI: presetLight.sunI,
+        hemiSky: presetLight.hemiSky,
+        hemiGround: presetLight.hemiGround,
+        hemiI: presetLight.hemiI,
+      }
+    : moodCfg
+
   const [dx, dy, dz] = spec.environment.lighting.direction
   const group = useRef<THREE.Group>(null)
   const flipped = view === 'back'
   const targetX = flipped ? Math.PI / 2 : -Math.PI / 2
   const tpl = spec.template
-  const bgColor = STUDIO_BG[tpl] ?? '#f0e2e7'
+  const bgColor = theme.bgColor || STUDIO_BG[tpl] || '#f0e2e7'
 
   useFrame(({ clock }, dt) => {
     if (group.current) {
@@ -174,7 +189,7 @@ function SceneContent({
         <Environment resolution={128} frames={1}>
           <Lightformer
             form="ring"
-            intensity={tpl === 'city' ? 1.25 : 1.5}
+            intensity={light.envIntensity}
             position={[0, 8, 2]}
             rotation={[Math.PI / 2, 0, 0]}
             scale={10}
@@ -182,7 +197,7 @@ function SceneContent({
           />
           <Lightformer
             form="rect"
-            intensity={tpl === 'city' ? 0.95 : 1.3}
+            intensity={light.envIntensity * 0.85}
             position={[-6, 4, -5]}
             rotation={[0, Math.PI / 4, 0]}
             scale={[8, 4, 1]}
@@ -190,11 +205,11 @@ function SceneContent({
           />
           <Lightformer
             form="rect"
-            intensity={0.75}
+            intensity={theme.isDark ? 0.65 : 0.75}
             position={[6, 3, 5]}
             rotation={[0, -Math.PI / 4, 0]}
             scale={[6, 4, 1]}
-            color="#ffffff"
+            color={light.rimColor}
           />
         </Environment>
 
@@ -214,7 +229,7 @@ function SceneContent({
           shadow-camera-near={1}
           shadow-camera-far={22}
         />
-        <directionalLight position={[-4.5, 4.5, -4.5]} intensity={0.55} color="#b7d2f2" />
+        <directionalLight position={[-4.5, 4.5, -4.5]} intensity={light.rimI} color={light.rimColor} />
 
         {/* 极薄双面名片主体 */}
         <group ref={group} rotation={[-Math.PI / 2, 0, 0]}>

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
@@ -382,15 +383,19 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }, [trunks, cardsPerTree, side])
 
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isNight = moodId === 'sakura_night'
+  const isSunset = moodId === 'sakura_sunset'
+
   return (
     <group>
       {trunks.map((tr) => (
         <group key={tr.key}>
           <mesh geometry={tr.mainGeo} castShadow receiveShadow>
-            <meshStandardMaterial color="#4b352d" roughness={0.9} />
+            <meshStandardMaterial color={isNight ? '#332421' : '#4b352d'} roughness={0.9} />
           </mesh>
           <mesh geometry={tr.subGeo} castShadow receiveShadow>
-            <meshStandardMaterial color="#573e34" roughness={0.9} />
+            <meshStandardMaterial color={isNight ? '#3d2a26' : '#573e34'} roughness={0.9} />
           </mesh>
         </group>
       ))}
@@ -402,9 +407,9 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
       >
         <meshStandardMaterial
           map={clusterTex}
-          emissive="#ffd6e5"
+          emissive={isNight ? '#ff9ec6' : isSunset ? '#ffae9c' : '#ffd6e5'}
           emissiveMap={clusterTex}
-          emissiveIntensity={0.24}
+          emissiveIntensity={isNight ? 0.52 : isSunset ? 0.3 : 0.24}
           alphaTest={0.28}
           roughness={0.76}
           side={THREE.DoubleSide}
@@ -420,6 +425,7 @@ function MiniTorii({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const x = -0.1
   const y = 0.54
   const z = THIN_T / 2 + sakuraSurfaceZ(x, y, spec, side) - 0.01
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
 
   return (
     <group position={[x, y, z]} rotation={[0, 0, -0.18]} scale={0.96}>
@@ -435,8 +441,19 @@ function MiniTorii({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
             <cylinderGeometry args={[0.02, 0.024, 0.28, 14]} />
             <meshStandardMaterial color="#c9382e" roughness={0.55} />
           </mesh>
+          {isNight && side === 1 && (
+            <group position={[idx === 0 ? -0.055 : 0.055, -0.045, 0.03]}>
+              <mesh>
+                <boxGeometry args={[0.028, 0.028, 0.042]} />
+                <meshStandardMaterial color="#fff1c2" emissive="#ffb74d" emissiveIntensity={1.6} />
+              </mesh>
+            </group>
+          )}
         </group>
       ))}
+      {isNight && side === 1 && (
+        <pointLight position={[0, -0.06, 0.12]} distance={1.25} intensity={1.05} color="#ffcb7a" />
+      )}
       {/* 下横梁贯木 */}
       <mesh position={[0, 0, 0.22]} castShadow>
         <boxGeometry args={[0.36, 0.024, 0.026]} />
@@ -464,6 +481,7 @@ function StoneLantern({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const x = 0.04
   const y = 0.26
   const z = THIN_T / 2 + sakuraSurfaceZ(x, y, spec, side) - 0.006
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
 
   return (
     <group position={[x, y, z]} scale={0.95}>
@@ -485,9 +503,21 @@ function StoneLantern({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       {/* 暖光火袋 */}
       <mesh position={[0, 0, 0.158]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[0.034, 0.034, 0.046, 6]} />
-        <meshStandardMaterial color="#ffe4a3" emissive="#ffb347" emissiveIntensity={1.1} roughness={0.4} />
+        <meshStandardMaterial
+          color="#ffe4a3"
+          emissive="#ffb347"
+          emissiveIntensity={isNight ? 1.85 : 1.1}
+          roughness={0.4}
+        />
       </mesh>
-      {side === 1 && <pointLight position={[0, 0, 0.16]} distance={0.75} intensity={0.42} color="#ffc978" />}
+      {side === 1 && (
+        <pointLight
+          position={[0, 0, 0.16]}
+          distance={isNight ? 1.55 : 0.75}
+          intensity={isNight ? 1.35 : 0.42}
+          color="#ffc978"
+        />
+      )}
       {/* 四坡石笠檐 + 宝珠 */}
       <mesh position={[0, 0, 0.198]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.074, 0.046, 6]} />
@@ -553,13 +583,24 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
     return new THREE.ShapeGeometry(shape, 32)
   }, [])
 
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isNight = moodId === 'sakura_night'
+  const isSunset = moodId === 'sakura_sunset'
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uSkyMap: { value: skyTex },
+      uNight: { value: isNight ? 1 : 0 },
+      uSunset: { value: isSunset ? 1 : 0 },
     }),
     [skyTex],
   )
+
+  useEffect(() => {
+    uniforms.uNight.value = isNight ? 1 : 0
+    uniforms.uSunset.value = isSunset ? 1 : 0
+  }, [uniforms, isNight, isSunset])
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -600,6 +641,8 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
           fragmentShader={`
             uniform float uTime;
             uniform sampler2D uSkyMap;
+            uniform float uNight;
+            uniform float uSunset;
             varying vec2 vLocal;
             void main() {
               float w1 = sin(vLocal.x * 24.0 + uTime * 1.2) * 0.01;
@@ -609,11 +652,20 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
               vec3 pondTint = vec3(0.32, 0.62, 0.66);
               vec3 sakuraBlush = vec3(0.95, 0.72, 0.8);
               float treeReflect = smoothstep(0.05, 0.4, vLocal.y + w1 * 2.0);
-              vec3 col = mix(pondTint, skyCol * 1.02, 0.48);
-              col = mix(col, sakuraBlush, treeReflect * 0.26);
+              vec3 dayCol = mix(pondTint, skyCol * 1.02, 0.48);
+              dayCol = mix(dayCol, sakuraBlush, treeReflect * 0.26);
+
+              vec3 sunsetCol = mix(dayCol, vec3(0.96, 0.58, 0.45), 0.36);
+              vec3 nightCol = mix(vec3(0.06, 0.14, 0.24), vec3(0.75, 0.36, 0.56), treeReflect * 0.38);
+              float lanternGlow = smoothstep(0.45, 0.0, length(vLocal - vec2(-0.36, 0.18)));
+              nightCol += vec3(0.98, 0.72, 0.34) * lanternGlow * 0.35;
+
+              vec3 col = mix(dayCol, sunsetCol, uSunset);
+              col = mix(col, nightCol, uNight);
+
               float shimmer = sin(vLocal.x * 18.0 + vLocal.y * 16.0 + uTime * 1.5) * cos(vLocal.x * 12.0 - vLocal.y * 13.0 - uTime * 1.1);
-              col += vec3(0.96, 0.98, 1.0) * max(0.0, shimmer) * 0.12;
-              gl_FragColor = vec4(col, 0.86);
+              col += vec3(0.96, 0.98, 1.0) * max(0.0, shimmer) * (uNight > 0.5 ? 0.16 : 0.12);
+              gl_FragColor = vec4(col, 0.88);
             }
           `}
         />
@@ -689,10 +741,63 @@ function FallingSakuraPetals({ spec, quality }: { spec: SceneSpec; quality: Qual
     mesh.instanceMatrix.needsUpdate = true
   })
 
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
+
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, count]}>
       <planeGeometry args={[0.028, 0.028]} />
-      <meshStandardMaterial map={petalTex} alphaTest={0.25} roughness={0.65} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={petalTex}
+        emissive={isNight ? '#ff9ec6' : '#000000'}
+        emissiveMap={petalTex}
+        emissiveIntensity={isNight ? 0.45 : 0}
+        alphaTest={0.25}
+        roughness={0.65}
+        side={THREE.DoubleSide}
+      />
+    </instancedMesh>
+  )
+}
+
+function SakuraFireflies() {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const count = 26
+  const flies = useMemo(() => {
+    const rnd = mulberry32(9915)
+    return Array.from({ length: count }, () => ({
+      bx: (rnd() - 0.5) * (SAKURA_CARD_W - 0.4),
+      by: (rnd() - 0.5) * (SAKURA_CARD_H - 0.35),
+      bz: 0.16 + rnd() * 0.42,
+      ph: rnd() * 10,
+      spd: 0.8 + rnd() * 0.9,
+      s: 0.008 + rnd() * 0.008,
+    }))
+  }, [])
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+
+  useFrame(({ clock }) => {
+    const mesh = ref.current
+    if (!mesh) return
+    const t = clock.elapsedTime
+    for (let i = 0; i < flies.length; i++) {
+      const f = flies[i]
+      dummy.position.set(
+        f.bx + Math.sin(t * f.spd + f.ph) * 0.12,
+        f.by + Math.cos(t * f.spd * 0.8 + f.ph) * 0.1,
+        f.bz + Math.sin(t * 1.4 + f.ph) * 0.05,
+      )
+      const pulse = 0.55 + 0.55 * Math.sin(t * 3.1 + f.ph * 2)
+      dummy.scale.setScalar(f.s * pulse)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(i, dummy.matrix)
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, count]}>
+      <sphereGeometry args={[1, 6, 6]} />
+      <meshBasicMaterial color="#ffe28a" />
     </instancedMesh>
   )
 }
@@ -756,17 +861,23 @@ function SakuraPetalName({
   const maxPts = quality === 'low' ? 680 : quality === 'medium' ? 1150 : 1650
   const pts = useMemo(() => sampleSakuraText(text, maxPts, seed), [text, maxPts, seed])
 
+  const theme = resolveSceneTheme(spec)
+  const isNight = theme.mood.id === 'sakura_night'
+  const useCustom = side === 1 && !!theme.customTextColor
+  const useBright = useCustom ? theme.isDark : isNight
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(seed + 41)
-    const colors = [
-      new THREE.Color('#801e42'),
-      new THREE.Color('#a62d59'),
-      new THREE.Color('#c74372'),
-      new THREE.Color('#e26992'),
-    ]
+    let paletteHex: [string, string, string, string] = ['#801e42', '#a62d59', '#c74372', '#e26992']
+    if (useCustom && theme.customTextColor) {
+      paletteHex = makeHexVariants(theme.customTextColor)
+    } else if (isNight) {
+      paletteHex = ['#fff0f6', '#ffd1e3', '#ff99c2', '#ff75ad']
+    }
+    const colors = paletteHex.map((h) => new THREE.Color(h))
     const cosR = Math.cos(rotZ)
     const sinR = Math.sin(rotZ)
 
@@ -786,13 +897,21 @@ function SakuraPetalName({
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, seed, spec, side, box, rotZ])
+  }, [pts, seed, spec, side, box, rotZ, useCustom, theme.customTextColor, isNight])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[0.03, 0.03]} />
-      <meshStandardMaterial map={petalTex} alphaTest={0.28} roughness={0.75} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={petalTex}
+        emissive={useBright ? theme.customTextColor || '#ff9ec6' : '#000000'}
+        emissiveMap={petalTex}
+        emissiveIntensity={useBright ? 0.42 : 0}
+        alphaTest={0.28}
+        roughness={0.75}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -801,6 +920,7 @@ function SakuraQrPetals({ text, spec }: { text: string; spec: SceneSpec }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const petalTex = useMemo(() => makeSakuraPetalTexture(), [])
   useEffect(() => () => petalTex.dispose(), [petalTex])
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
 
   const { pts, modSize } = useMemo(() => {
     try {
@@ -823,8 +943,8 @@ function SakuraQrPetals({ text, spec }: { text: string; spec: SceneSpec }) {
     if (!mesh || pts.length === 0) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(8421)
-    const cA = new THREE.Color('#691738')
-    const cB = new THREE.Color('#8a244c')
+    const cA = new THREE.Color(isNight ? '#ffe6f2' : '#691738')
+    const cB = new THREE.Color(isNight ? '#ff9ec6' : '#8a244c')
 
     pts.forEach((p, i) => {
       const x = -1.04 + (p[0] - 0.5) * 0.82
@@ -839,13 +959,21 @@ function SakuraQrPetals({ text, spec }: { text: string; spec: SceneSpec }) {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, modSize, spec])
+  }, [pts, modSize, spec, isNight])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial map={petalTex} alphaTest={0.28} roughness={0.78} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={petalTex}
+        emissive={isNight ? '#ffb8d4' : '#000000'}
+        emissiveMap={petalTex}
+        emissiveIntensity={isNight ? 0.4 : 0}
+        alphaTest={0.28}
+        roughness={0.78}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -865,6 +993,8 @@ export function SakuraDioramaCard({
   qrText: string
   onSculpt?: (x: number, y: number) => void
 }) {
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
+
   return (
     <group>
       {/* 极薄暖苔木底芯 */}
@@ -883,6 +1013,7 @@ export function SakuraDioramaCard({
         <SteppingStones side={1} spec={spec} />
         <KoiPond spec={spec} />
         <FallingSakuraPetals spec={spec} quality={quality} />
+        {isNight && <SakuraFireflies />}
         <SakuraPetalName
           side={1}
           text={profile.name || 'Zilin'}

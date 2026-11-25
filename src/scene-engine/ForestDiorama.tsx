@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
@@ -225,14 +226,16 @@ function FineGrassCarpet({ side, spec, quality }: { side: 1 | -1; spec: SceneSpe
     return out
   }, [count, side, spec])
 
+  const isAutumn = resolveSceneTheme(spec).mood.id === 'forest_autumn'
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const col = new THREE.Color()
-    const deep = new THREE.Color('#243b1a')
-    const mid = new THREE.Color('#47662c')
-    const warm = new THREE.Color('#6f853c')
+    const deep = new THREE.Color(isAutumn ? '#3d3618' : '#243b1a')
+    const mid = new THREE.Color(isAutumn ? '#8a6d28' : '#47662c')
+    const warm = new THREE.Color(isAutumn ? '#c97b32' : '#6f853c')
 
     places.forEach((p, i) => {
       dummy.position.set(p.x, p.y, THIN_T / 2 + p.z - 0.008)
@@ -242,12 +245,12 @@ function FineGrassCarpet({ side, spec, quality }: { side: 1 | -1; spec: SceneSpe
       mesh.setMatrixAt(i, dummy.matrix)
 
       col.copy(deep).lerp(mid, p.tone)
-      if (p.tone > 0.74) col.lerp(warm, (p.tone - 0.74) * 2.2)
+      if (p.tone > 0.7) col.lerp(warm, (p.tone - 0.7) * 2.2)
       mesh.setColorAt(i, col)
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [places])
+  }, [places, isAutumn])
 
   if (places.length === 0) return null
   return (
@@ -424,6 +427,8 @@ function RealisticBroadleafTrees({ side, spec, quality }: { side: 1 | -1; spec: 
     }
   }, [side, spec, quality])
 
+  const isAutumn = resolveSceneTheme(spec).mood.id === 'forest_autumn'
+
   useLayoutEffect(() => {
     const tMesh = trunkRef.current
     const lMesh = leafRef.current
@@ -432,8 +437,8 @@ function RealisticBroadleafTrees({ side, spec, quality }: { side: 1 | -1; spec: 
     const dummy = new THREE.Object3D()
     const col = new THREE.Color()
     const rnd = mulberry32(side === 1 ? 7711 : 8822)
-    const cDark = new THREE.Color('#476632')
-    const cLight = new THREE.Color('#a4bf6d')
+    const cDark = new THREE.Color(isAutumn ? '#9c4324' : '#476632')
+    const cLight = new THREE.Color(isAutumn ? '#f2a644' : '#a4bf6d')
 
     let ci = 0
     trees.forEach((t, ti) => {
@@ -472,7 +477,7 @@ function RealisticBroadleafTrees({ side, spec, quality }: { side: 1 | -1; spec: 
     tMesh.instanceMatrix.needsUpdate = true
     lMesh.instanceMatrix.needsUpdate = true
     if (lMesh.instanceColor) lMesh.instanceColor.needsUpdate = true
-  }, [trees, cardsPerTree, side])
+  }, [trees, cardsPerTree, side, isAutumn])
 
   return (
     <group>
@@ -513,13 +518,23 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
     return new THREE.ShapeGeometry(shape, 32)
   }, [])
 
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isNight = moodId === 'forest_firefly'
+  const isAutumn = moodId === 'forest_autumn'
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uSkyMap: { value: skyTex },
+      uNight: { value: isNight ? 1 : 0 },
+      uAutumn: { value: isAutumn ? 1 : 0 },
     }),
     [skyTex],
   )
+  useEffect(() => {
+    uniforms.uNight.value = isNight ? 1 : 0
+    uniforms.uAutumn.value = isAutumn ? 1 : 0
+  }, [uniforms, isNight, isAutumn])
 
   useFrame(({ clock }) => {
     if (matRef.current) {
@@ -548,6 +563,8 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
         fragmentShader={`
           uniform float uTime;
           uniform sampler2D uSkyMap;
+          uniform float uNight;
+          uniform float uAutumn;
           varying vec2 vLocal;
           varying vec3 vWorldPos;
 
@@ -559,29 +576,78 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
             vec2 uv = vec2(vLocal.x * 0.95 + 0.5 + w1, vLocal.y * 1.2 + 0.52 + w2);
             vec3 skyCol = texture2D(uSkyMap, clamp(uv, 0.02, 0.98)).rgb;
 
-            // 模拟右上侧茂密冷杉林在镜面湖水里的锯齿状倒影剪影（对标图 1 & 图 3）
+            // 模拟右上侧茂密冷杉林在镜面湖水里的锯齿状倒影剪影
             float treeCoord = vLocal.y * 18.0 + vLocal.x * 7.0;
             float jagged = abs(fract(treeCoord * 0.45) - 0.5) * 0.24 + sin(treeCoord * 3.1) * 0.04;
             float reflectEdge = (vLocal.x * 0.85 + vLocal.y * 0.62) + w1 * 2.5;
             float treeShadow = smoothstep(0.16 - jagged, 0.24 - jagged, reflectEdge);
             vec3 spruceRefl = vec3(0.09, 0.17, 0.12);
 
-            vec3 col = mix(skyCol * 1.08, spruceRefl, treeShadow * 0.78);
+            vec3 dayCol = mix(skyCol * 1.08, spruceRefl, treeShadow * 0.78);
+            vec3 autumnCol = mix(mix(skyCol, vec3(0.95, 0.72, 0.46), 0.42), vec3(0.24, 0.15, 0.08), treeShadow * 0.72);
+            vec3 nightSky = vec3(0.08, 0.18, 0.34);
+            vec3 nightCol = mix(nightSky, vec3(0.04, 0.09, 0.12), treeShadow * 0.82);
 
-            // 边缘微暗水岸衔接 + 阳光微光
+            vec3 col = mix(dayCol, autumnCol, uAutumn);
+            col = mix(col, nightCol, uNight);
+
+            // 边缘微暗水岸衔接 + 阳光/月光微澜
             float r = length(vLocal / vec2(0.48, 0.36));
             float rimShade = smoothstep(0.75, 1.05, r);
             col = mix(col, vec3(0.14, 0.24, 0.22), rimShade * 0.48);
 
-            // 柔和自然的白云高光与微澜（无规则条纹）
             float shimmer = sin(vLocal.x * 16.0 + vLocal.y * 19.0 + uTime * 1.4) * cos(vLocal.x * 11.0 - vLocal.y * 14.0 - uTime * 1.1);
-            col += vec3(0.92, 0.97, 1.0) * max(0.0, shimmer) * 0.1 * (1.0 - treeShadow);
+            vec3 shimmerCol = mix(vec3(0.92, 0.97, 1.0), vec3(0.68, 0.94, 0.88), uNight);
+            col += shimmerCol * max(0.0, shimmer) * (uNight > 0.5 ? 0.18 : 0.1) * (1.0 - treeShadow);
 
             gl_FragColor = vec4(col, 0.96);
           }
         `}
       />
     </mesh>
+  )
+}
+
+function ForestFireflies() {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const count = 42
+  const flies = useMemo(() => {
+    const rnd = mulberry32(6619)
+    return Array.from({ length: count }, () => ({
+      bx: (rnd() - 0.5) * (FOREST_CARD_W - 0.35),
+      by: (rnd() - 0.5) * (FOREST_CARD_H - 0.3),
+      bz: 0.18 + rnd() * 0.52,
+      ph: rnd() * 12,
+      spd: 0.75 + rnd() * 0.95,
+      s: 0.0085 + rnd() * 0.009,
+    }))
+  }, [])
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+
+  useFrame(({ clock }) => {
+    const mesh = ref.current
+    if (!mesh) return
+    const t = clock.elapsedTime
+    for (let i = 0; i < flies.length; i++) {
+      const f = flies[i]
+      dummy.position.set(
+        f.bx + Math.sin(t * f.spd + f.ph) * 0.14,
+        f.by + Math.cos(t * f.spd * 0.85 + f.ph) * 0.12,
+        f.bz + Math.sin(t * 1.5 + f.ph) * 0.06,
+      )
+      const pulse = 0.5 + 0.65 * Math.sin(t * 3.4 + f.ph * 2.1)
+      dummy.scale.setScalar(f.s * Math.max(0.25, pulse))
+      dummy.updateMatrix()
+      mesh.setMatrixAt(i, dummy.matrix)
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, count]}>
+      <sphereGeometry args={[1, 6, 6]} />
+      <meshBasicMaterial color="#d8ff7a" />
+    </instancedMesh>
   )
 }
 
@@ -644,20 +710,24 @@ function WildflowerName({
   const maxPts = quality === 'low' ? 680 : quality === 'medium' ? 1150 : 1650
   const pts = useMemo(() => sampleTextMask(text, maxPts, seed), [text, maxPts, seed])
 
+  const theme = resolveSceneTheme(spec)
+  const isFirefly = theme.mood.id === 'forest_firefly'
+  const useCustom = side === 1 && !!theme.customTextColor
+  const useBright = useCustom ? theme.isDark : isFirefly
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(seed + 19)
-    // 五彩柔和野花调色板（奶白为主，点缀淡黄、浅紫、柔粉、淡蓝）
-    const colors = [
-      new THREE.Color('#ffffff'),
-      new THREE.Color('#faf6ec'),
-      new THREE.Color('#f7e8a4'),
-      new THREE.Color('#e6c2d6'),
-      new THREE.Color('#c2c7f2'),
-      new THREE.Color('#b6dcf0'),
-    ]
+    let paletteHex = ['#ffffff', '#faf6ec', '#f7e8a4', '#e6c2d6', '#c2c7f2', '#b6dcf0']
+    if (useCustom && theme.customTextColor) {
+      const v = makeHexVariants(theme.customTextColor)
+      paletteHex = [v[0], v[1], v[2], v[3], v[1], v[0]]
+    } else if (isFirefly) {
+      paletteHex = ['#e6fff5', '#a7f3d0', '#fef08a', '#6ee7b7', '#ffffff', '#bbf7d0']
+    }
+    const colors = paletteHex.map((h) => new THREE.Color(h))
     const cosR = Math.cos(rotZ)
     const sinR = Math.sin(rotZ)
 
@@ -678,7 +748,7 @@ function WildflowerName({
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, seed, spec, side, box, rotZ])
+  }, [pts, seed, spec, side, box, rotZ, useCustom, theme.customTextColor, isFirefly])
 
   if (pts.length === 0) return null
   return (
@@ -686,6 +756,9 @@ function WildflowerName({
       <planeGeometry args={[0.032, 0.032]} />
       <meshStandardMaterial
         map={flowerTex}
+        emissive={useBright ? theme.customTextColor || '#9bf5c8' : '#000000'}
+        emissiveMap={flowerTex}
+        emissiveIntensity={useBright ? 0.42 : 0}
         alphaTest={0.3}
         roughness={0.78}
         side={THREE.DoubleSide}
@@ -769,13 +842,15 @@ function FineQrMeadow({ text, spec }: { text: string; spec: SceneSpec }) {
     }
   }, [text])
 
+  const isFirefly = resolveSceneTheme(spec).mood.id === 'forest_firefly'
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh || pts.length === 0) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(9909)
-    const cA = new THREE.Color('#eef3e4')
-    const cB = new THREE.Color('#d4e3c5')
+    const cA = new THREE.Color(isFirefly ? '#d1fae5' : '#eef3e4')
+    const cB = new THREE.Color(isFirefly ? '#6ee7b7' : '#d4e3c5')
 
     pts.forEach((p, i) => {
       const x = -1.04 + (p[0] - 0.5) * 0.82
@@ -790,13 +865,21 @@ function FineQrMeadow({ text, spec }: { text: string; spec: SceneSpec }) {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, modSize, spec])
+  }, [pts, modSize, spec, isFirefly])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial map={flowerTex} alphaTest={0.28} roughness={0.82} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={flowerTex}
+        emissive={isFirefly ? '#7ef2c4' : '#000000'}
+        emissiveMap={flowerTex}
+        emissiveIntensity={isFirefly ? 0.35 : 0}
+        alphaTest={0.28}
+        roughness={0.82}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -816,6 +899,8 @@ export function ForestDioramaCard({
   qrText: string
   onSculpt?: (x: number, y: number) => void
 }) {
+  const isFirefly = resolveSceneTheme(spec).mood.id === 'forest_firefly'
+
   return (
     <group>
       {/* 极薄深墨绿基底核心 */}
@@ -832,6 +917,7 @@ export function ForestDioramaCard({
         <RealisticBroadleafTrees side={1} spec={spec} quality={quality} />
         <MirrorLake spec={spec} />
         <ScatteredWildflowers side={1} spec={spec} quality={quality} />
+        {isFirefly && <ForestFireflies />}
         <WildflowerName
           side={1}
           text={profile.name || 'Zilin'}

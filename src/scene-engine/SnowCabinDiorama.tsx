@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
@@ -99,6 +100,8 @@ function SnowTerrain({
     }
   }, [snowTex])
 
+  const isAurora = resolveSceneTheme(spec).mood.id === 'snow_aurora'
+
   const geo = useMemo(() => {
     const segX = quality === 'low' ? 48 : 80
     const segY = quality === 'low' ? 32 : 52
@@ -106,8 +109,8 @@ function SnowTerrain({
     const pos = g.attributes.position as THREE.BufferAttribute
     const colors = new Float32Array(pos.count * 3)
     const tmp = new THREE.Color()
-    const shadowSnow = new THREE.Color('#d7e6f5')
-    const pureSnow = new THREE.Color('#f8fbff')
+    const shadowSnow = new THREE.Color(isAurora ? '#355778' : '#d7e6f5')
+    const pureSnow = new THREE.Color(isAurora ? '#6d96bd' : '#f8fbff')
 
     for (let i = 0; i < pos.count; i++) {
       const lx = pos.getX(i)
@@ -125,7 +128,7 @@ function SnowTerrain({
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     g.computeVertexNormals()
     return g
-  }, [side, spec, quality])
+  }, [side, spec, quality, isAurora])
 
   return (
     <mesh
@@ -147,8 +150,8 @@ function SnowTerrain({
         map={snowTex.map}
         normalMap={snowTex.normalMap}
         normalScale={new THREE.Vector2(0.55, 0.55)}
-        emissive="#dbe8f5"
-        emissiveIntensity={0.14}
+        emissive={isAurora ? '#12283d' : '#dbe8f5'}
+        emissiveIntensity={isAurora ? 0.18 : 0.14}
         roughness={0.62}
         metalness={0.04}
         vertexColors
@@ -202,6 +205,11 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
     })
   })
 
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isAurora = moodId === 'snow_aurora'
+  const isDusk = moodId === 'snow_dusk'
+  const winEmissive = isAurora ? 1.82 : isDusk ? 1.45 : 1.18
+
   return (
     <group position={[cx, cy, cz]} rotation={[0, 0, -0.34]} scale={0.94}>
       {/* 石砌厚实小地基（稳稳嵌入雪坡） */}
@@ -225,7 +233,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
-          emissiveIntensity={1.18}
+          emissiveIntensity={winEmissive}
           roughness={0.78}
         />
       </mesh>
@@ -235,7 +243,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
-          emissiveIntensity={1.18}
+          emissiveIntensity={winEmissive}
           roughness={0.78}
         />
       </mesh>
@@ -246,7 +254,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
-          emissiveIntensity={1.05}
+          emissiveIntensity={winEmissive * 0.92}
           roughness={0.78}
         />
       </mesh>
@@ -256,7 +264,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
-          emissiveIntensity={1.05}
+          emissiveIntensity={winEmissive * 0.92}
           roughness={0.78}
         />
       </mesh>
@@ -275,7 +283,12 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
         <meshBasicMaterial color="#ffe49e" />
       </mesh>
       {side === 1 && (
-        <pointLight position={[0, -0.24, 0.18]} distance={0.92} intensity={0.72} color="#ffb863" />
+        <pointLight
+          position={[0, -0.24, 0.18]}
+          distance={isAurora ? 1.55 : isDusk ? 1.25 : 0.92}
+          intensity={isAurora ? 1.55 : isDusk ? 1.15 : 0.72}
+          color="#ffb863"
+        />
       )}
 
       {/* 深棕人字坡木屋顶 */}
@@ -429,6 +442,8 @@ function SnowySpruceTrees({ side, spec, quality }: { side: 1 | -1; spec: SceneSp
     if (bm.instanceColor) bm.instanceColor.needsUpdate = true
   }, [trees, tiersPerTree, side])
 
+  const isAurora = resolveSceneTheme(spec).mood.id === 'snow_aurora'
+
   if (trees.length === 0) return null
   return (
     <group>
@@ -438,9 +453,9 @@ function SnowySpruceTrees({ side, spec, quality }: { side: 1 | -1; spec: SceneSp
       <instancedMesh ref={branchRef} args={[tierGeo, undefined, trees.length * tiersPerTree]} castShadow receiveShadow>
         <meshStandardMaterial
           map={snowPineTex}
-          emissive="#dce9f5"
+          emissive={isAurora ? '#43a4b8' : '#dce9f5'}
           emissiveMap={snowPineTex}
-          emissiveIntensity={0.22}
+          emissiveIntensity={isAurora ? 0.28 : 0.22}
           alphaTest={0.28}
           roughness={0.78}
           side={THREE.DoubleSide}
@@ -468,7 +483,22 @@ function FrozenLake({ spec }: { spec: SceneSpec }) {
     return new THREE.ShapeGeometry(shape, 24)
   }, [])
 
-  const uniforms = useMemo(() => ({ uTime: { value: 0 } }), [])
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isAurora = moodId === 'snow_aurora'
+  const isDusk = moodId === 'snow_dusk'
+
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uAurora: { value: isAurora ? 1 : 0 },
+      uDusk: { value: isDusk ? 1 : 0 },
+    }),
+    [],
+  )
+  useEffect(() => {
+    uniforms.uAurora.value = isAurora ? 1 : 0
+    uniforms.uDusk.value = isDusk ? 1 : 0
+  }, [uniforms, isAurora, isDusk])
   useFrame(({ clock }) => {
     if (matRef.current) matRef.current.uniforms.uTime.value = clock.elapsedTime
   })
@@ -490,23 +520,141 @@ function FrozenLake({ spec }: { spec: SceneSpec }) {
         `}
         fragmentShader={`
           uniform float uTime;
+          uniform float uAurora;
+          uniform float uDusk;
           varying vec2 vLocal;
           void main() {
             float r = length(vLocal / vec2(0.38, 0.25));
             vec3 iceCenter = vec3(0.56, 0.78, 0.92);
             vec3 iceEdge = vec3(0.84, 0.93, 0.99);
-            vec3 col = mix(iceCenter, iceEdge, smoothstep(0.35, 1.0, r));
-            // 柔和冰晶斜反光带
+            vec3 dayCol = mix(iceCenter, iceEdge, smoothstep(0.35, 1.0, r));
             float sheen = smoothstep(0.02, 0.12, 0.12 - abs(vLocal.x * 0.65 + vLocal.y - sin(uTime * 0.4) * 0.06));
-            col += vec3(0.22, 0.28, 0.32) * sheen;
-            // 木屋暖灯方向淡淡微暖高光
+            dayCol += vec3(0.22, 0.28, 0.32) * sheen;
             float warm = smoothstep(0.28, 0.0, length(vLocal - vec2(-0.08, 0.15)));
-            col += vec3(0.18, 0.11, 0.04) * warm;
+            dayCol += vec3(0.18, 0.11, 0.04) * warm;
+
+            vec3 duskCol = mix(dayCol, vec3(0.58, 0.68, 0.88), 0.35) + vec3(0.24, 0.14, 0.05) * warm;
+
+            vec3 auroraIce = mix(vec3(0.08, 0.22, 0.34), vec3(0.24, 0.46, 0.62), smoothstep(0.4, 1.0, r));
+            float wave = 0.5 + 0.5 * sin(vLocal.x * 9.0 + vLocal.y * 6.0 - uTime * 1.1);
+            auroraIce += mix(vec3(0.16, 0.92, 0.62), vec3(0.45, 0.28, 0.88), wave) * 0.32 * (1.0 - r * 0.5);
+            auroraIce += vec3(0.55, 0.34, 0.12) * warm;
+
+            vec3 col = mix(dayCol, duskCol, uDusk);
+            col = mix(col, auroraIce, uAurora);
             gl_FragColor = vec4(col, 0.9);
           }
         `}
       />
     </mesh>
+  )
+}
+
+/* ---------------- 极光丝绸幕帘（仅在雪山极光皮肤下优雅舞动） ---------------- */
+
+function AuroraCurtain() {
+  const matARef = useRef<THREE.ShaderMaterial>(null)
+  const matBRef = useRef<THREE.ShaderMaterial>(null)
+
+  const geoA = useMemo(() => {
+    const g = new THREE.PlaneGeometry(2.85, 0.78, 56, 8)
+    const pos = g.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const zCurve = -0.2 * Math.cos(x * 1.1) + 0.09 * Math.sin(x * 2.5)
+      pos.setZ(i, zCurve)
+    }
+    g.rotateX(Math.PI / 2)
+    return g
+  }, [])
+
+  const geoB = useMemo(() => {
+    const g = new THREE.PlaneGeometry(2.4, 0.64, 48, 8)
+    const pos = g.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const zCurve = 0.14 * Math.sin(x * 1.7 + 0.5) - 0.1 * Math.cos(x * 2.8)
+      pos.setZ(i, zCurve)
+    }
+    g.rotateX(Math.PI / 2)
+    return g
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      geoA.dispose()
+      geoB.dispose()
+    }
+  }, [geoA, geoB])
+
+  const uniA = useMemo(() => ({ uTime: { value: 0 }, uShift: { value: 0 } }), [])
+  const uniB = useMemo(() => ({ uTime: { value: 0 }, uShift: { value: 1.8 } }), [])
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    if (matARef.current) matARef.current.uniforms.uTime.value = t
+    if (matBRef.current) matBRef.current.uniforms.uTime.value = t
+  })
+
+  const vertexShader = `
+    varying vec2 vUv;
+    uniform float uTime;
+    uniform float uShift;
+    void main() {
+      vUv = uv;
+      vec3 p = position;
+      float sway = sin(uv.x * 7.5 + uTime * 0.7 + uShift) * 0.07 * uv.y;
+      p.y += sway;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    }
+  `
+  const fragmentShader = `
+    uniform float uTime;
+    uniform float uShift;
+    varying vec2 vUv;
+    void main() {
+      float edgeX = smoothstep(0.0, 0.24, vUv.x) * smoothstep(1.0, 0.76, vUv.x);
+      float edgeY = smoothstep(0.0, 0.34, vUv.y) * smoothstep(1.0, 0.32, vUv.y);
+      float rays = 0.5 + 0.5 * sin(vUv.x * 24.0 + uTime * 0.9 + sin(vUv.x * 7.0 - uTime * 0.5 + uShift) * 2.1);
+      float flow = 0.45 + 0.55 * sin(vUv.x * 8.0 - uTime * 0.45 + vUv.y * 2.2 + uShift);
+      float alpha = edgeX * edgeY * (0.35 + 0.65 * rays) * flow * 0.62;
+
+      vec3 green = vec3(0.18, 0.96, 0.66);
+      vec3 cyan = vec3(0.22, 0.88, 1.0);
+      vec3 violet = vec3(0.64, 0.28, 0.96);
+      vec3 col = mix(green, cyan, smoothstep(0.18, 0.62, vUv.y));
+      col = mix(col, violet, smoothstep(0.55, 0.96, vUv.y));
+      gl_FragColor = vec4(col, alpha);
+    }
+  `
+
+  return (
+    <group position={[0.02, 0.88, THIN_T / 2 + 0.72]}>
+      <mesh geometry={geoA}>
+        <shaderMaterial
+          ref={matARef}
+          transparent
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+          uniforms={uniA}
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+        />
+      </mesh>
+      <mesh geometry={geoB} position={[0.16, 0.14, 0.08]}>
+        <shaderMaterial
+          ref={matBRef}
+          transparent
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+          uniforms={uniB}
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+        />
+      </mesh>
+    </group>
   )
 }
 
@@ -614,17 +762,23 @@ function SnowFieldName({
   const maxPts = quality === 'low' ? 680 : quality === 'medium' ? 1150 : 1650
   const pts = useMemo(() => sampleSnowText(text, maxPts, seed), [text, maxPts, seed])
 
+  const theme = resolveSceneTheme(spec)
+  const isAurora = theme.mood.id === 'snow_aurora'
+  const useCustom = side === 1 && !!theme.customTextColor
+  const useBright = useCustom ? theme.isDark : isAurora
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(seed + 53)
-    const colors = [
-      new THREE.Color('#1a4354'),
-      new THREE.Color('#255a7a'),
-      new THREE.Color('#265947'),
-      new THREE.Color('#38748f'),
-    ]
+    let paletteHex: [string, string, string, string] = ['#1a4354', '#255a7a', '#265947', '#38748f']
+    if (useCustom && theme.customTextColor) {
+      paletteHex = makeHexVariants(theme.customTextColor)
+    } else if (isAurora) {
+      paletteHex = ['#a8ffea', '#56f2c8', '#7dd3fc', '#e8fbff']
+    }
+    const colors = paletteHex.map((h) => new THREE.Color(h))
     const cosR = Math.cos(rotZ)
     const sinR = Math.sin(rotZ)
 
@@ -644,13 +798,21 @@ function SnowFieldName({
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, seed, spec, side, box, rotZ])
+  }, [pts, seed, spec, side, box, rotZ, useCustom, theme.customTextColor, isAurora])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[0.03, 0.03]} />
-      <meshStandardMaterial map={dotTex} alphaTest={0.28} roughness={0.75} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={dotTex}
+        emissive={useBright ? theme.customTextColor || '#64f5d2' : '#000000'}
+        emissiveMap={dotTex}
+        emissiveIntensity={useBright ? 0.48 : 0}
+        alphaTest={0.28}
+        roughness={0.75}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -659,6 +821,7 @@ function SnowQrMatrix({ text, spec }: { text: string; spec: SceneSpec }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const dotTex = useMemo(() => makeFlowerSpriteTexture(), [])
   useEffect(() => () => dotTex.dispose(), [dotTex])
+  const isAurora = resolveSceneTheme(spec).mood.id === 'snow_aurora'
 
   const { pts, modSize } = useMemo(() => {
     try {
@@ -681,8 +844,8 @@ function SnowQrMatrix({ text, spec }: { text: string; spec: SceneSpec }) {
     if (!mesh || pts.length === 0) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(6241)
-    const cA = new THREE.Color('#173f54')
-    const cB = new THREE.Color('#21536e')
+    const cA = new THREE.Color(isAurora ? '#9bfae2' : '#173f54')
+    const cB = new THREE.Color(isAurora ? '#5eead4' : '#21536e')
 
     pts.forEach((p, i) => {
       const x = -1.04 + (p[0] - 0.5) * 0.82
@@ -697,13 +860,21 @@ function SnowQrMatrix({ text, spec }: { text: string; spec: SceneSpec }) {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, modSize, spec])
+  }, [pts, modSize, spec, isAurora])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial map={dotTex} alphaTest={0.28} roughness={0.78} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={dotTex}
+        emissive={isAurora ? '#64f5d2' : '#000000'}
+        emissiveMap={dotTex}
+        emissiveIntensity={isAurora ? 0.45 : 0}
+        alphaTest={0.28}
+        roughness={0.78}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -723,6 +894,8 @@ export function SnowCabinDioramaCard({
   qrText: string
   onSculpt?: (x: number, y: number) => void
 }) {
+  const isAurora = resolveSceneTheme(spec).mood.id === 'snow_aurora'
+
   return (
     <group>
       {/* 极薄冷岩灰底芯 */}
@@ -738,6 +911,7 @@ export function SnowCabinDioramaCard({
         <SnowySpruceTrees side={1} spec={spec} quality={quality} />
         <FrozenLake spec={spec} />
         <FallingSnowflakes quality={quality} />
+        {isAurora && <AuroraCurtain />}
         <SnowFieldName
           side={1}
           text={profile.name || 'Zilin'}

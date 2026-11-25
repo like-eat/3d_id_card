@@ -1,4 +1,5 @@
 import type { SceneSpec } from '../contracts/scene-spec'
+import { resolveSceneTheme } from '../contracts/moods'
 import { getAccessoryInfo } from '../contracts/accessories'
 import { getMbtiInfo } from '../contracts/mbti'
 import type { CardProfile } from '../scene-engine/cardTexture'
@@ -23,81 +24,51 @@ interface PosterTheme {
   qrBoxBg: string
   qrText: string
   frameBg: string
+  isDark: boolean
 }
 
-function themeForTemplate(tpl: SceneSpec['template']): PosterTheme {
-  if (tpl === 'coast') {
+function shiftHex(hex: string, delta: number): string {
+  const c = hex.replace('#', '')
+  const n = parseInt(c, 16)
+  if (c.length !== 6 || Number.isNaN(n)) return hex
+  const clamp = (v: number) => Math.min(255, Math.max(0, Math.round(v)))
+  const r = clamp(((n >> 16) & 255) + delta)
+  const g = clamp(((n >> 8) & 255) + delta)
+  const b = clamp((n & 255) + delta)
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
+function themeForScene(spec: SceneSpec): PosterTheme {
+  const { mood, bgColor, isDark, accent } = resolveSceneTheme(spec)
+  if (isDark) {
     return {
-      bg: '#f2eae2',
-      bgSubtle: '#e5d8ca',
-      cardBg: '#ffffff',
-      cardBorder: 'rgba(35, 71, 86, 0.12)',
-      titleColor: '#234756',
-      subColor: '#5c727d',
-      accent: '#2185b8',
-      tag: 'GOLDEN COAST · 3D CARD',
-      qrBoxBg: '#f6f9fb',
-      qrText: '#335361',
-      frameBg: '#efe5da',
-    }
-  }
-  if (tpl === 'city') {
-    return {
-      bg: '#070c17',
-      bgSubtle: '#0d172b',
+      bg: bgColor,
+      bgSubtle: shiftHex(bgColor, 14),
       cardBg: '#0f172a',
-      cardBorder: 'rgba(56, 232, 255, 0.28)',
-      titleColor: '#f0f9ff',
-      subColor: '#94a3b8',
-      accent: '#38e8ff',
-      tag: 'QUANTUM TECH · 3D CARD',
+      cardBorder: `${accent}48`,
+      titleColor: '#f1f7ff',
+      subColor: '#98aec6',
+      accent,
+      tag: mood.posterTag,
       qrBoxBg: '#162238',
-      qrText: '#bae6fd',
-      frameBg: '#091020',
-    }
-  }
-  if (tpl === 'sakura_garden') {
-    return {
-      bg: '#f7edf0',
-      bgSubtle: '#eedce2',
-      cardBg: '#ffffff',
-      cardBorder: 'rgba(166, 45, 89, 0.14)',
-      titleColor: '#42202d',
-      subColor: '#755360',
-      accent: '#c94c76',
-      tag: 'SAKURA GARDEN · 3D CARD',
-      qrBoxBg: '#fcf6f8',
-      qrText: '#7d2243',
-      frameBg: '#f2e4e8',
-    }
-  }
-  if (tpl === 'snow_cabin') {
-    return {
-      bg: '#dce7f3',
-      bgSubtle: '#ccdced',
-      cardBg: '#ffffff',
-      cardBorder: 'rgba(38, 79, 104, 0.14)',
-      titleColor: '#1a3044',
-      subColor: '#526a7f',
-      accent: '#2c72a3',
-      tag: 'SNOWY CABIN · 3D CARD',
-      qrBoxBg: '#f3f8fc',
-      qrText: '#21536e',
-      frameBg: '#d5e3f0',
+      qrText: '#d4e9fc',
+      frameBg: shiftHex(bgColor, 8),
+      isDark: true,
     }
   }
   return {
-    bg: '#f0e2e7',
-    bgSubtle: '#e5d2d9',
+    bg: bgColor,
+    bgSubtle: shiftHex(bgColor, -14),
     cardBg: '#ffffff',
-    cardBorder: 'rgba(30, 51, 36, 0.1)',
-    titleColor: '#1e3324',
-    subColor: '#55685b',
-    accent: '#3b7a57',
-    tag: 'MORNING FOREST · 3D CARD',
-    qrBoxBg: '#f5f8f6',
-    qrText: '#2c4a35',
-    frameBg: '#eadce1',
+    cardBorder: 'rgba(28, 42, 50, 0.12)',
+    titleColor: '#1e2f38',
+    subColor: '#5a6d77',
+    accent,
+    tag: mood.posterTag,
+    qrBoxBg: '#f6f9fb',
+    qrText: '#2c4654',
+    frameBg: shiftHex(bgColor, -8),
+    isDark: false,
   }
 }
 
@@ -161,7 +132,7 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')!
-  const theme = themeForTemplate(opts.spec.template)
+  const theme = themeForScene(opts.spec)
 
   // 1. 背景渐变
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H)
@@ -189,7 +160,7 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
   const frameH = 760
 
   ctx.save()
-  ctx.shadowColor = opts.spec.template === 'city' ? 'rgba(0, 0, 0, 0.65)' : 'rgba(30, 30, 35, 0.16)'
+  ctx.shadowColor = theme.isDark ? 'rgba(0, 0, 0, 0.65)' : 'rgba(30, 30, 35, 0.16)'
   ctx.shadowBlur = 42
   ctx.shadowOffsetY = 16
   ctx.fillStyle = theme.bg
@@ -226,7 +197,7 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
   const cardH = 580
 
   ctx.save()
-  ctx.shadowColor = opts.spec.template === 'city' ? 'rgba(0, 0, 0, 0.5)' : 'rgba(30, 30, 35, 0.1)'
+  ctx.shadowColor = theme.isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(30, 30, 35, 0.1)'
   ctx.shadowBlur = 32
   ctx.shadowOffsetY = 12
   ctx.fillStyle = theme.cardBg
@@ -273,7 +244,7 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
       const textW = ctx.measureText(pillLabel).width
       const pillW = Math.min(infoMaxW, (mbtiImg ? 72 : 26) + textW + 24)
 
-      ctx.fillStyle = opts.spec.template === 'city' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.045)'
+      ctx.fillStyle = theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.045)'
       drawRoundedRect(ctx, nextX, pillY, pillW, pillH, 28)
       ctx.fill()
 
@@ -301,7 +272,7 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
       const accX = fitsSameRow ? nextX : infoX
       const accY = fitsSameRow ? pillY : pillY + pillH + 10
 
-      ctx.fillStyle = opts.spec.template === 'city' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.045)'
+      ctx.fillStyle = theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.045)'
       drawRoundedRect(ctx, accX, accY, accW, pillH, 28)
       ctx.fill()
 

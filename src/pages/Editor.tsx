@@ -6,6 +6,13 @@ import { createCard, getCard, listMyCards, publishCard, saveSceneVersion, update
 import type { CardRow, ProfileData } from '../lib/db'
 import { generateSceneSpec, PLANNER_VERSION } from '../lib/generate'
 import { cloneSpec, templatePresets, type SceneSpec } from '../contracts/scene-spec'
+import {
+  CUSTOM_BG_SWATCHES,
+  CUSTOM_TEXT_SWATCHES,
+  getMoodSkin,
+  getMoodsForTemplate,
+  resolveSceneTheme,
+} from '../contracts/moods'
 import { ACCESSORY_LIST } from '../contracts/accessories'
 import { MBTI_LIST } from '../contracts/mbti'
 import { CardScene, hasWebGL, type ViewPreset } from '../scene-engine/CardScene'
@@ -76,14 +83,27 @@ function loadDraft(): DraftForm | null {
   }
 }
 
-/** 从 hash（如 #/editor?tpl=2）或 search 中读取初始模板索引 */
-function initialTemplateIndex(): number {
+/** 从 hash（如 #/editor?tpl=2&mood=snow_aurora）或 search 中读取初始模板与皮肤 */
+function readInitParams(): { tplIdx: number; moodId: string | null } {
   const qIdx = location.hash.indexOf('?')
-  const hashSearch = qIdx >= 0 ? location.hash.slice(qIdx + 1) : ''
-  const raw = new URLSearchParams(hashSearch).get('tpl') ?? new URLSearchParams(location.search).get('tpl')
-  if (raw == null) return 0
-  const n = Number(raw)
-  return Number.isInteger(n) && n >= 0 && n < templatePresets.length ? n : 0
+  const hashParams = new URLSearchParams(qIdx >= 0 ? location.hash.slice(qIdx + 1) : '')
+  const searchParams = new URLSearchParams(location.search)
+  const rawTpl = hashParams.get('tpl') ?? searchParams.get('tpl')
+  const n = rawTpl == null ? 0 : Number(rawTpl)
+  const tplIdx = Number.isInteger(n) && n >= 0 && n < templatePresets.length ? n : 0
+  const moodId = hashParams.get('mood') ?? searchParams.get('mood')
+  return { tplIdx, moodId }
+}
+
+function makeInitialSpec(): { tplIdx: number; spec: SceneSpec } {
+  const { tplIdx, moodId } = readInitParams()
+  const base = cloneSpec(templatePresets[tplIdx].make())
+  if (moodId) {
+    const skin = getMoodSkin(base.template, moodId)
+    base.mood = skin.id
+    base.environment.lighting = { ...base.environment.lighting, preset: skin.lightingPreset }
+  }
+  return { tplIdx, spec: base }
 }
 
 /* ---------------- 延迟登录弹窗 ---------------- */
@@ -295,9 +315,10 @@ function Editor() {
       ? { ...saved, mbti: saved.mbti ?? '', accessory: saved.accessory ?? '' }
       : { name: '', title: '', bio: '', mbti: '', accessory: '', website: '', links: [] }
   })
+  const [initialSetup] = useState(() => makeInitialSpec())
   const [activeTab, setActiveTab] = useState<EditorTab>('template')
-  const [activeTemplate, setActiveTemplate] = useState(() => initialTemplateIndex())
-  const [spec, setSpec] = useState<SceneSpec | null>(() => cloneSpec(templatePresets[initialTemplateIndex()].make()))
+  const [activeTemplate, setActiveTemplate] = useState(initialSetup.tplIdx)
+  const [spec, setSpec] = useState<SceneSpec | null>(initialSetup.spec)
   const [view, setView] = useState<ViewPreset>('commercial')
   const [progress, setProgress] = useState<string | null>(null)
   const [posterBusy, setPosterBusy] = useState(false)
@@ -806,22 +827,122 @@ function Editor() {
 
             {activeTab === 'style' && spec && (
               <>
-                <div className="section-title">微调场景（实时生效）</div>
-                {spec.template !== 'city' && (
-                  <div className="field">
-                    <label>光照氛围</label>
-                    <select
-                      value={spec.environment.lighting.preset}
-                      onChange={(e) => patchEnv({ lighting: { ...spec.environment.lighting, preset: e.target.value as SceneSpec['environment']['lighting']['preset'] } })}
-                    >
-                      <option value="morning">清晨</option>
-                      <option value="noon">正午</option>
-                      <option value="golden_hour">黄金时刻</option>
-                      <option value="dusk">黄昏</option>
-                      <option value="overcast">阴天</option>
-                    </select>
+                <div className="section-title">✨ 氛围皮肤（一键切换昼夜与风格）</div>
+                <div className="mood-grid">
+                  {getMoodsForTemplate(spec.template).map((m) => {
+                    const active = resolveSceneTheme(spec).mood.id === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={active ? 'mood-card active' : 'mood-card'}
+                        onClick={() =>
+                          setSpec((s) =>
+                            s
+                              ? {
+                                  ...s,
+                                  mood: m.id,
+                                  customBg: undefined,
+                                  environment: {
+                                    ...s.environment,
+                                    lighting: { ...s.environment.lighting, preset: m.lightingPreset },
+                                  },
+                                }
+                              : s,
+                          )
+                        }
+                      >
+                        <span
+                          className="mood-swatch"
+                          style={{ background: `linear-gradient(90deg, ${m.swatch[0]}, ${m.swatch[1]})` }}
+                        />
+                        <span className="mood-title">{m.emoji} {m.label}</span>
+                        <span className="mood-desc">{m.desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="section-title" style={{ marginTop: 4 }}>🎨 自定义配色（可选）</div>
+                <div className="field">
+                  <label>影棚背景色</label>
+                  <div className="swatch-row">
+                    {CUSTOM_BG_SWATCHES.map((sw) => (
+                      <button
+                        key={sw.color}
+                        type="button"
+                        title={sw.label}
+                        className={spec.customBg === sw.color ? 'swatch-btn active' : 'swatch-btn'}
+                        style={{ backgroundColor: sw.color }}
+                        onClick={() => setSpec((s) => (s ? { ...s, customBg: sw.color } : s))}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      className="swatch-picker"
+                      aria-label="自定义影棚背景色"
+                      value={spec.customBg || resolveSceneTheme(spec).bgColor}
+                      onChange={(e) => setSpec((s) => (s ? { ...s, customBg: e.target.value } : s))}
+                    />
+                    {spec.customBg && (
+                      <button
+                        type="button"
+                        className="swatch-reset"
+                        onClick={() => setSpec((s) => (s ? { ...s, customBg: undefined } : s))}
+                      >
+                        默认
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
+
+                <div className="field">
+                  <label>正面名字主色</label>
+                  <div className="swatch-row">
+                    {CUSTOM_TEXT_SWATCHES.map((sw) => (
+                      <button
+                        key={sw.color}
+                        type="button"
+                        title={sw.label}
+                        className={spec.customTextColor === sw.color ? 'swatch-btn active' : 'swatch-btn'}
+                        style={{ backgroundColor: sw.color }}
+                        onClick={() => setSpec((s) => (s ? { ...s, customTextColor: sw.color } : s))}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      className="swatch-picker"
+                      aria-label="自定义正面名字主色"
+                      value={spec.customTextColor || resolveSceneTheme(spec).accent}
+                      onChange={(e) => setSpec((s) => (s ? { ...s, customTextColor: e.target.value } : s))}
+                    />
+                    {spec.customTextColor && (
+                      <button
+                        type="button"
+                        className="swatch-reset"
+                        onClick={() => setSpec((s) => (s ? { ...s, customTextColor: undefined } : s))}
+                      >
+                        默认
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="section-title" style={{ marginTop: 4 }}>微调场景（实时生效）</div>
+                <div className="field">
+                  <label>光照氛围</label>
+                  <select
+                    value={spec.environment.lighting.preset}
+                    onChange={(e) => patchEnv({ lighting: { ...spec.environment.lighting, preset: e.target.value as SceneSpec['environment']['lighting']['preset'] } })}
+                  >
+                    <option value="morning">清晨</option>
+                    <option value="noon">正午</option>
+                    <option value="golden_hour">黄金时刻</option>
+                    <option value="dusk">黄昏</option>
+                    <option value="overcast">阴天</option>
+                    <option value="night">夜晚 / 极夜</option>
+                  </select>
+                </div>
                 <div className="field">
                   <label>雾气浓度：{spec.environment.lighting.fog.toFixed(2)}</label>
                   <input

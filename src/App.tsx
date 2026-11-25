@@ -24,7 +24,7 @@ export function App() {
 
   let page: JSX.Element
   if (path.startsWith('/card/')) {
-    const slug = path.slice('/card/'.length).replace(/\/+$/, '')
+    const slug = path.slice('/card/'.length).split('?')[0].replace(/\/+$/, '')
     page = <CardViewerPage slug={slug} />
   } else if (path.startsWith('/editor')) {
     page = <EditorPage />

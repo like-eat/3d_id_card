@@ -75,6 +75,9 @@ export const qualitySchema = z.object({
 export const sceneSpecSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   template: z.enum(TEMPLATES),
+  mood: z.string().max(32).optional(),
+  customBg: hexColor.optional(),
+  customTextColor: hexColor.optional(),
   palette: paletteSchema,
   environment: z.object({
     terrain: terrainSchema,
@@ -121,6 +124,7 @@ export function defaultForestSpec(): SceneSpec {
 
 export function morningForestSpec(): SceneSpec {
   const s = defaultForestSpec()
+  s.mood = 'forest_morning'
   s.environment.lighting = { preset: 'morning', direction: [0.5, 1, 0.4], fog: 0.18 }
   s.environment.terrain.bumps = [{ x: -0.45, y: 0.05, radius: 0.6, height: 0.4 }]
   return s
@@ -129,6 +133,7 @@ export function morningForestSpec(): SceneSpec {
 export function sunsetCoastSpec(): SceneSpec {
   const s = defaultForestSpec()
   s.template = 'coast'
+  s.mood = 'coast_day'
   s.palette = {
     primary: '#b99a6d',
     secondary: '#dcc494',
@@ -150,6 +155,7 @@ export function sunsetCoastSpec(): SceneSpec {
 export function neonCitySpec(): SceneSpec {
   const s = defaultForestSpec()
   s.template = 'city'
+  s.mood = 'tech_cyan'
   s.palette = {
     primary: '#1d2430',
     secondary: '#2a3442',
@@ -171,6 +177,7 @@ export function neonCitySpec(): SceneSpec {
 export function sakuraGardenSpec(): SceneSpec {
   const s = defaultForestSpec()
   s.template = 'sakura_garden'
+  s.mood = 'sakura_day'
   s.palette = {
     primary: '#4e6c3f',
     secondary: '#f5a8c0',
@@ -192,6 +199,7 @@ export function sakuraGardenSpec(): SceneSpec {
 export function snowCabinSpec(): SceneSpec {
   const s = defaultForestSpec()
   s.template = 'snow_cabin'
+  s.mood = 'snow_day'
   s.palette = {
     primary: '#264f68',
     secondary: '#9fd0ee',
@@ -259,6 +267,12 @@ export function parseSceneSpec(raw: unknown): { spec: SceneSpec; ok: boolean } {
       ...r,
       schemaVersion: SCHEMA_VERSION,
       template: TEMPLATES.includes(r.template as TemplateId) ? r.template : fallback.template,
+      mood: typeof r.mood === 'string' && r.mood.length <= 32 ? r.mood : undefined,
+      customBg: typeof r.customBg === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.customBg) ? r.customBg : undefined,
+      customTextColor:
+        typeof r.customTextColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.customTextColor)
+          ? r.customTextColor
+          : undefined,
       palette: { ...fallback.palette, ...((r.palette as object) ?? {}) },
       environment: {
         terrain: {

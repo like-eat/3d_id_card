@@ -792,3 +792,118 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
     left: 12px;
   }
 }
+
+
+/* ---------- 落地页氛围皮肤快切胶囊 ---------- */
+.landing .mood-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(12, 18, 20, 0.56);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.landing .mood-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(232, 240, 236, 0.85);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.landing .mood-pill.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-weight: 600;
+}
+.landing .mood-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  flex: none;
+}
+
+/* ---------- 编辑器氛围皮肤网格 & 自定义色盘 ---------- */
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mood-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 9px 8px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  text-align: left;
+  transition: transform .12s, border-color .15s, background .15s;
+}
+.mood-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.mood-card.active {
+  border-color: var(--accent);
+  background: rgba(111, 195, 160, 0.12);
+}
+.mood-card .mood-swatch {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  margin-bottom: 2px;
+}
+.mood-card .mood-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.mood-card .mood-desc {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+.swatch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+.swatch-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+}
+.swatch-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(111, 195, 160, 0.45);
+  transform: scale(1.08);
+}
+.swatch-reset {
+  padding: 3px 9px;
+  font-size: 11.5px;
+  border-radius: 999px;
+}
+.swatch-picker {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}

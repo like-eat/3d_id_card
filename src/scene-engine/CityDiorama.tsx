@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
@@ -23,9 +24,11 @@ type Quality = 'low' | 'medium' | 'high'
 
 function CircuitWaferFace({
   side,
+  accent,
   onSculpt,
 }: {
   side: 1 | -1
+  accent: string
   onSculpt?: (x: number, y: number) => void
 }) {
   const pcb = useMemo(() => makeCircuitBoardTextures(), [])
@@ -55,9 +58,9 @@ function CircuitWaferFace({
       <planeGeometry args={[CITY_CARD_W, CITY_CARD_H]} />
       <meshStandardMaterial
         map={pcb.map}
-        emissive={new THREE.Color('#38e8ff')}
+        emissive={new THREE.Color(accent)}
         emissiveMap={pcb.emissiveMap}
-        emissiveIntensity={1.25}
+        emissiveIntensity={1.32}
         roughnessMap={pcb.roughnessMap}
         roughness={0.62}
         metalness={0.55}
@@ -71,9 +74,13 @@ function CircuitWaferFace({
 function QuantumCoreAssembly({
   position,
   scale = 1,
+  accent,
+  secondary,
 }: {
   position: [number, number, number]
   scale?: number
+  accent: string
+  secondary: string
 }) {
   const coreRef = useRef<THREE.Mesh>(null)
   const ring1Ref = useRef<THREE.Mesh>(null)
@@ -139,20 +146,20 @@ function QuantumCoreAssembly({
       {/* 底座能量槽光环 */}
       <mesh position={[0, 0, 0.082]}>
         <ringGeometry args={[0.17, 0.22, 32]} />
-        <meshBasicMaterial color="#38f2ff" side={THREE.DoubleSide} />
+        <meshBasicMaterial color={accent} side={THREE.DoubleSide} />
       </mesh>
       <mesh position={[0, 0, 0.052]}>
         <ringGeometry args={[0.31, 0.335, 32]} />
-        <meshBasicMaterial color="#60a5fa" side={THREE.DoubleSide} />
+        <meshBasicMaterial color={secondary} side={THREE.DoubleSide} />
       </mesh>
 
       {/* 底座向上投射的极轻盈全息光锥 */}
       <mesh position={[0, 0, 0.24]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[0.26, 0.14, 0.32, 24, 1, true]} />
         <meshBasicMaterial
-          color="#22d3ee"
+          color={accent}
           transparent
-          opacity={0.11}
+          opacity={0.12}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -162,9 +169,9 @@ function QuantumCoreAssembly({
       <mesh ref={coreRef} position={[0, 0, 0.42]}>
         <octahedronGeometry args={[0.125, 0]} />
         <meshStandardMaterial
-          color="#bae6fd"
-          emissive="#22d3ee"
-          emissiveIntensity={1.6}
+          color="#ffffff"
+          emissive={accent}
+          emissiveIntensity={1.65}
           metalness={0.35}
           roughness={0.12}
         />
@@ -174,9 +181,9 @@ function QuantumCoreAssembly({
       <mesh ref={ring1Ref} position={[0, 0, 0.42]}>
         <torusGeometry args={[0.24, 0.0085, 12, 48]} />
         <meshStandardMaterial
-          color="#7dd3fc"
-          emissive="#22d3ee"
-          emissiveIntensity={1.4}
+          color="#ffffff"
+          emissive={accent}
+          emissiveIntensity={1.45}
           metalness={0.8}
           roughness={0.2}
         />
@@ -184,33 +191,43 @@ function QuantumCoreAssembly({
       <mesh ref={ring2Ref} position={[0, 0, 0.42]}>
         <torusGeometry args={[0.31, 0.0065, 10, 56]} />
         <meshStandardMaterial
-          color="#c4b5fd"
-          emissive="#818cf8"
-          emissiveIntensity={1.35}
+          color="#ffffff"
+          emissive={secondary}
+          emissiveIntensity={1.4}
           metalness={0.85}
           roughness={0.2}
         />
       </mesh>
       <mesh ref={ring3Ref} position={[0, 0, 0.42]}>
         <torusGeometry args={[0.38, 0.0045, 8, 64]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+        <meshBasicMaterial color={accent} transparent opacity={0.68} />
       </mesh>
 
       {/* 环绕悬浮全息数据微粒 */}
       <instancedMesh ref={particlesRef} args={[undefined, undefined, particles.length]}>
         <octahedronGeometry args={[1, 0]} />
-        <meshBasicMaterial color="#a5f3fc" />
+        <meshBasicMaterial color={accent} />
       </instancedMesh>
 
-      {/* 核心散发出的冰蓝环境光，照亮周围电路与金属模块 */}
-      <pointLight position={[0, 0, 0.44]} intensity={2.2} distance={2.8} color="#38e8ff" />
+      {/* 核心散发出的环境光，照亮周围电路与金属模块 */}
+      <pointLight position={[0, 0, 0.44]} intensity={2.25} distance={2.9} color={accent} />
     </group>
   )
 }
 
 /* ---------------- 3. 量子服务器矩阵 + 光纤能量柱 + 微型贴片芯片 ---------------- */
 
-function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
+function QuantumModules({
+  side,
+  spec,
+  accent,
+  secondary,
+}: {
+  side: 1 | -1
+  spec: SceneSpec
+  accent: string
+  secondary: string
+}) {
   const towerTexA = useMemo(() => makeTechTowerTextures(side === 1 ? 2077 : 2088), [side])
   const towerTexB = useMemo(() => makeTechTowerTextures(side === 1 ? 3099 : 3111), [side])
 
@@ -256,6 +273,19 @@ function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
     [towerTexB],
   )
 
+  useEffect(() => {
+    sideMatA.emissive.set(accent)
+    sideMatB.emissive.set(secondary)
+  }, [sideMatA, sideMatB, accent, secondary])
+
+  useEffect(() => {
+    return () => {
+      capMat.dispose()
+      sideMatA.dispose()
+      sideMatB.dispose()
+    }
+  }, [capMat, sideMatA, sideMatB])
+
   const matsA = useMemo(() => [sideMatA, sideMatA, sideMatA, sideMatA, capMat, capMat], [sideMatA, capMat])
   const matsB = useMemo(() => [sideMatB, sideMatB, sideMatB, sideMatB, capMat, capMat], [sideMatB, capMat])
 
@@ -283,12 +313,12 @@ function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
 
     // 半透明玻璃光纤能量柱
     const basePillars = [
-      { x: -0.22, y: 0.28, h: 0.48, color: '#22d3ee' },
-      { x: -0.02, y: 0.12, h: 0.34, color: '#818cf8' },
-      { x: 1.02, y: 0.48, h: 0.52, color: '#38bdf8' },
-      { x: 1.06, y: -0.04, h: 0.36, color: '#22d3ee' },
-      { x: -0.68, y: -0.06, h: 0.32, color: '#67e8f9' },
-      { x: 0.46, y: -0.44, h: 0.3, color: '#818cf8' },
+      { x: -0.22, y: 0.28, h: 0.48, useSec: false },
+      { x: -0.02, y: 0.12, h: 0.34, useSec: true },
+      { x: 1.02, y: 0.48, h: 0.52, useSec: false },
+      { x: 1.06, y: -0.04, h: 0.36, useSec: false },
+      { x: -0.68, y: -0.06, h: 0.32, useSec: false },
+      { x: 0.46, y: -0.44, h: 0.3, useSec: true },
     ]
     const pCount = Math.max(3, Math.min(basePillars.length, Math.round(5 * countScale)))
 
@@ -338,7 +368,7 @@ function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
               </mesh>
               <mesh position={[0, 0, 0.19]}>
                 <sphereGeometry args={[0.014, 8, 8]} />
-                <meshBasicMaterial color="#38f2ff" />
+                <meshBasicMaterial color={accent} />
               </mesh>
             </group>
           )}
@@ -356,13 +386,13 @@ function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           {/* 内部发光纤芯 */}
           <mesh position={[0, 0, p.h / 2 + 0.02]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.014, 0.014, p.h, 10]} />
-            <meshBasicMaterial color={p.color} />
+            <meshBasicMaterial color={p.useSec ? secondary : accent} />
           </mesh>
           {/* 外部半透明石英玻璃套管 */}
           <mesh position={[0, 0, p.h / 2 + 0.02]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.038, 0.038, p.h, 14]} />
             <meshStandardMaterial
-              color="#bae6fd"
+              color={accent}
               transparent
               opacity={0.26}
               metalness={0.2}
@@ -391,7 +421,15 @@ function QuantumModules({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
 
 /* ---------------- 4. 沿电路总线高速穿梭的数据光脉冲 ---------------- */
 
-function DataBusPulses({ side }: { side: 1 | -1 }) {
+function DataBusPulses({
+  side,
+  accent,
+  secondary,
+}: {
+  side: 1 | -1
+  accent: string
+  secondary: string
+}) {
   const p1 = useRef<THREE.Mesh>(null)
   const p2 = useRef<THREE.Mesh>(null)
   const p3 = useRef<THREE.Mesh>(null)
@@ -411,19 +449,19 @@ function DataBusPulses({ side }: { side: 1 | -1 }) {
     <group>
       <mesh ref={p1} position={[0, -0.14, z]}>
         <boxGeometry args={[0.14, 0.014, 0.008]} />
-        <meshBasicMaterial color="#38f2ff" />
+        <meshBasicMaterial color={accent} />
       </mesh>
       <mesh ref={p2} position={[0, 0.42, z]}>
         <boxGeometry args={[0.12, 0.014, 0.008]} />
-        <meshBasicMaterial color="#a5f3fc" />
+        <meshBasicMaterial color="#ffffff" />
       </mesh>
       <mesh ref={p3} position={[-0.36, 0, z]}>
         <boxGeometry args={[0.014, 0.12, 0.008]} />
-        <meshBasicMaterial color="#818cf8" />
+        <meshBasicMaterial color={secondary} />
       </mesh>
       <mesh ref={p4} position={[0, -0.24, z]}>
         <boxGeometry args={[0.1, 0.012, 0.008]} />
-        <meshBasicMaterial color="#60a5fa" />
+        <meshBasicMaterial color={accent} />
       </mesh>
     </group>
   )
@@ -470,12 +508,16 @@ function HoloLightName({
   box,
   seed,
   rotZ = 0,
+  accent,
+  secondary,
 }: {
   text: string
   quality: Quality
   box: { cx: number; cy: number; w: number; h: number }
   seed: number
   rotZ?: number
+  accent: string
+  secondary: string
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const dotTex = useMemo(() => makeLightDotTexture(), [])
@@ -489,11 +531,12 @@ function HoloLightName({
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(seed + 41)
+    const [vLight, vBase, , vBright] = makeHexVariants(accent)
     const colors = [
-      new THREE.Color('#e0faff'),
-      new THREE.Color('#38e8ff'),
-      new THREE.Color('#60a5fa'),
-      new THREE.Color('#a78bfa'),
+      new THREE.Color(vBright),
+      new THREE.Color(vBase),
+      new THREE.Color(vLight),
+      new THREE.Color(secondary),
     ]
     const cosR = Math.cos(rotZ)
     const sinR = Math.sin(rotZ)
@@ -513,7 +556,7 @@ function HoloLightName({
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, seed, box, rotZ])
+  }, [pts, seed, box, rotZ, accent, secondary])
 
   if (pts.length === 0) return null
   return (
@@ -524,7 +567,7 @@ function HoloLightName({
   )
 }
 
-function HoloQrMatrix({ text }: { text: string }) {
+function HoloQrMatrix({ text, accent }: { text: string; accent: string }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const dotTex = useMemo(() => makeLightDotTexture(), [])
   useEffect(() => () => dotTex.dispose(), [dotTex])
@@ -550,8 +593,9 @@ function HoloQrMatrix({ text }: { text: string }) {
     if (!mesh || pts.length === 0) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(9527)
-    const cA = new THREE.Color('#cffafe')
-    const cB = new THREE.Color('#38e8ff')
+    const [, , , vBright] = makeHexVariants(accent)
+    const cA = new THREE.Color(vBright)
+    const cB = new THREE.Color(accent)
 
     pts.forEach((p, i) => {
       const x = -1.04 + (p[0] - 0.5) * 0.82
@@ -565,7 +609,7 @@ function HoloQrMatrix({ text }: { text: string }) {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, modSize])
+  }, [pts, modSize, accent])
 
   if (pts.length === 0) return null
   return (
@@ -591,6 +635,11 @@ export function CityDioramaCard({
   qrText: string
   onSculpt?: (x: number, y: number) => void
 }) {
+  const theme = resolveSceneTheme(spec)
+  const accent = theme.accent
+  const secondary = theme.secondaryAccent
+  const nameColor = theme.customTextColor || accent
+
   return (
     <group>
       {/* 极薄钛黑硅晶圆底芯 */}
@@ -599,17 +648,19 @@ export function CityDioramaCard({
         <meshStandardMaterial color="#0d1524" roughness={0.35} metalness={0.85} />
       </mesh>
 
-      {/* 正面（+Z）：悬浮量子核芯 + 全息星环 + 量子服务器阵 + 光纤能量柱 + 全息冰蓝拼字 */}
+      {/* 正面（+Z）：悬浮量子核芯 + 全息星环 + 量子服务器阵 + 光纤能量柱 + 全息拼字 */}
       <group>
-        <CircuitWaferFace side={1} onSculpt={onSculpt} />
-        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={1.08} />
-        <QuantumModules side={1} spec={spec} />
-        <DataBusPulses side={1} />
+        <CircuitWaferFace side={1} accent={accent} onSculpt={onSculpt} />
+        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={1.08} accent={accent} secondary={secondary} />
+        <QuantumModules side={1} spec={spec} accent={accent} secondary={secondary} />
+        <DataBusPulses side={1} accent={accent} secondary={secondary} />
         <HoloLightName
           text={profile.name || 'Zilin'}
           quality={quality}
           box={{ cx: -0.58, cy: -0.56, w: 1.48, h: 0.44 }}
           seed={601}
+          accent={nameColor}
+          secondary={theme.customTextColor ? nameColor : secondary}
         />
         <MbtiStandee
           mbti={profile.mbti}
@@ -627,17 +678,19 @@ export function CityDioramaCard({
 
       {/* 背面（绕 X 轴翻转 180°）：镜像量子科技世界 + 精细全息矩阵二维码 + 斜排全息字 */}
       <group rotation={[Math.PI, 0, 0]}>
-        <CircuitWaferFace side={-1} />
-        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={0.96} />
-        <QuantumModules side={-1} spec={spec} />
-        <DataBusPulses side={-1} />
-        <HoloQrMatrix text={qrText} />
+        <CircuitWaferFace side={-1} accent={accent} />
+        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={0.96} accent={accent} secondary={secondary} />
+        <QuantumModules side={-1} spec={spec} accent={accent} secondary={secondary} />
+        <DataBusPulses side={-1} accent={accent} secondary={secondary} />
+        <HoloQrMatrix text={qrText} accent={accent} />
         <HoloLightName
           text={profile.title || profile.name || 'Zilin'}
           quality={quality}
           box={{ cx: 0.36, cy: -0.42, w: 1.48, h: 0.36 }}
           seed={602}
           rotZ={0.24}
+          accent={accent}
+          secondary={secondary}
         />
       </group>
     </group>

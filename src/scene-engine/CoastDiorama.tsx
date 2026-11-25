@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
+import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
@@ -277,10 +278,25 @@ function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const cy = side === 1 ? -0.32 : 0.22
   const z = THIN_T / 2 + coastSurfaceZ(cx, cy, spec, side) - 0.004
   const facing = side === 1 ? -0.58 : -2.4
+  const isMoon = resolveSceneTheme(spec).mood.id === 'coast_moonbay'
 
   return (
     <group position={[cx, cy, z]} rotation={[0, 0, facing]}>
       <BeachUmbrella position={[0, -0.04, 0]} canopyTex={canopyTex} />
+      {isMoon && side === 1 && (
+        <group position={[0, -0.04, 0.28]}>
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const a = (i / 6) * Math.PI * 2
+            return (
+              <mesh key={i} position={[Math.cos(a) * 0.14, Math.sin(a) * 0.14, 0]}>
+                <sphereGeometry args={[0.011, 8, 8]} />
+                <meshBasicMaterial color="#ffe08a" />
+              </mesh>
+            )
+          })}
+          <pointLight position={[0, 0, 0]} color="#ffcb80" intensity={1.15} distance={1.35} />
+        </group>
+      )}
       <BeachLounger position={[-0.14, 0.06, 0]} rotZ={0.08} />
       <BeachLounger position={[0.14, 0.04, 0]} rotZ={-0.06} />
       {/* 中间小圆木边桌 + 迷你海岛冷饮 */}
@@ -510,6 +526,10 @@ function RealisticBayOcean({ spec }: { spec: SceneSpec }) {
   const skyTex = useMemo(() => makeLakeReflectionSkyTexture(), [])
   useEffect(() => () => skyTex.dispose(), [skyTex])
 
+  const moodId = resolveSceneTheme(spec).mood.id
+  const isSunset = moodId === 'coast_sunset'
+  const isMoon = moodId === 'coast_moonbay'
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -518,9 +538,36 @@ function RealisticBayOcean({ spec }: { spec: SceneSpec }) {
       uTurquoise: { value: new THREE.Color('#239bb5') },
       uDeep: { value: new THREE.Color('#145a8c') },
       uFoam: { value: new THREE.Color('#f7fbff') },
+      uCaustic: { value: new THREE.Color('#adeff5') },
+      uSunset: { value: 0 },
+      uMoon: { value: 0 },
     }),
     [skyTex],
   )
+
+  useEffect(() => {
+    if (isSunset) {
+      uniforms.uShallow.value.set('#f5a673')
+      uniforms.uTurquoise.value.set('#2e6e8e')
+      uniforms.uDeep.value.set('#1c355c')
+      uniforms.uFoam.value.set('#ffe4c4')
+      uniforms.uCaustic.value.set('#ffd2a0')
+    } else if (isMoon) {
+      uniforms.uShallow.value.set('#14567a')
+      uniforms.uTurquoise.value.set('#0e325c')
+      uniforms.uDeep.value.set('#081630')
+      uniforms.uFoam.value.set('#40f5ff')
+      uniforms.uCaustic.value.set('#38f2ff')
+    } else {
+      uniforms.uShallow.value.set('#54cfc7')
+      uniforms.uTurquoise.value.set('#239bb5')
+      uniforms.uDeep.value.set('#145a8c')
+      uniforms.uFoam.value.set('#f7fbff')
+      uniforms.uCaustic.value.set('#adeff5')
+    }
+    uniforms.uSunset.value = isSunset ? 1 : 0
+    uniforms.uMoon.value = isMoon ? 1 : 0
+  }, [uniforms, isSunset, isMoon])
 
   useFrame(({ clock }) => {
     if (matRef.current) matRef.current.uniforms.uTime.value = clock.elapsedTime
@@ -558,6 +605,9 @@ function RealisticBayOcean({ spec }: { spec: SceneSpec }) {
           uniform vec3 uTurquoise;
           uniform vec3 uDeep;
           uniform vec3 uFoam;
+          uniform vec3 uCaustic;
+          uniform float uSunset;
+          uniform float uMoon;
           varying vec2 vLocal;
           varying vec3 vWorldPos;
 
@@ -601,22 +651,27 @@ function RealisticBayOcean({ spec }: { spec: SceneSpec }) {
             vec3 waterCol = mix(uShallow, uTurquoise, dMid);
             waterCol = mix(waterCol, uDeep, dDeep);
 
-            // 1. 蓝天白云自然镜面反射（与森林镜面湖同级别的写实通透感）
+            // 1. 蓝天/霞光/夜空自然镜面反射
             float nWave = fbm2(vLocal * 5.2 + vec2(uTime * 0.18, -uTime * 0.14));
             float nWave2 = fbm2(vLocal * 11.5 + vec2(-uTime * 0.25, uTime * 0.2));
             vec2 skyUv = clamp(vec2(vLocal.x * 0.34 + 0.52, vLocal.y * 0.42 + 0.48) + (nWave - 0.5) * 0.08, 0.02, 0.98);
             vec3 skyRefl = texture2D(uSkyMap, skyUv).rgb;
+            vec3 sunsetSky = mix(vec3(0.98, 0.62, 0.42), vec3(0.65, 0.42, 0.68), dDeep);
+            vec3 moonSky = vec3(0.06, 0.14, 0.3);
+            skyRefl = mix(skyRefl, sunsetSky, uSunset * 0.72);
+            skyRefl = mix(skyRefl, moonSky, uMoon * 0.85);
             waterCol = mix(waterCol, skyRefl, 0.28 + 0.16 * dMid);
 
-            // 2. 浅滩水下阳光焦散光网（Caustics）
+            // 2. 浅滩水下焦散光网（星月夜呈现蓝眼泪荧光）
             float c1 = abs(sin((vLocal.x * 11.0 + nWave * 4.0) + uTime * 0.9));
             float c2 = abs(cos((vLocal.y * 12.0 - nWave2 * 4.0) - uTime * 0.7));
             float caustics = pow(1.0 - min(c1, c2), 4.0) * smoothstep(0.65, 0.08, sh);
-            waterCol += vec3(0.68, 0.95, 0.96) * caustics * 0.22;
+            waterCol += uCaustic * caustics * (uMoon > 0.5 ? 0.42 : 0.22);
 
-            // 3. 自然细腻的海面阳光微澜
+            // 3. 自然细腻的海面微澜与日落碎金
             float glint = smoothstep(0.68, 0.92, nWave2) * smoothstep(0.55, 0.85, nWave) * 0.28;
-            waterCol += vec3(0.98, 0.99, 1.0) * glint;
+            vec3 glintCol = mix(vec3(0.98, 0.99, 1.0), vec3(1.0, 0.78, 0.46), uSunset);
+            waterCol += glintCol * glint;
 
             // 4. 写实蕾丝状海岸白浪泡沫前沿
             float lace = fbm2(vLocal * 16.0 - vec2(uTime * 0.22, uTime * 0.18));
@@ -696,18 +751,24 @@ function CoastShellName({
   const maxPts = quality === 'low' ? 680 : quality === 'medium' ? 1100 : 1550
   const pts = useMemo(() => sampleCoastText(text, maxPts, seed), [text, maxPts, seed])
 
+  const theme = resolveSceneTheme(spec)
+  const isMoon = theme.mood.id === 'coast_moonbay'
+  const useCustom = side === 1 && !!theme.customTextColor
+  const useBright = useCustom ? theme.isDark : isMoon
+
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(seed + 31)
-    const colors = [
-      new THREE.Color('#285769'),
-      new THREE.Color('#3b788a'),
-      new THREE.Color('#d97f6c'),
-      new THREE.Color('#6b5242'),
-      new THREE.Color('#ffffff'),
-    ]
+    let paletteHex = ['#285769', '#3b788a', '#d97f6c', '#6b5242', '#ffffff']
+    if (useCustom && theme.customTextColor) {
+      const v = makeHexVariants(theme.customTextColor)
+      paletteHex = [v[1], v[0], v[2], v[3], v[1]]
+    } else if (isMoon) {
+      paletteHex = ['#7af5ff', '#b8fbff', '#ffffff', '#67e8f9', '#e0faff']
+    }
+    const colors = paletteHex.map((h) => new THREE.Color(h))
     const cosR = Math.cos(rotZ)
     const sinR = Math.sin(rotZ)
 
@@ -727,13 +788,21 @@ function CoastShellName({
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, seed, spec, side, box, rotZ])
+  }, [pts, seed, spec, side, box, rotZ, useCustom, theme.customTextColor, isMoon])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[0.03, 0.03]} />
-      <meshStandardMaterial map={spriteTex} alphaTest={0.3} roughness={0.78} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={spriteTex}
+        emissive={useBright ? theme.customTextColor || '#67f2ff' : '#000000'}
+        emissiveMap={spriteTex}
+        emissiveIntensity={useBright ? 0.45 : 0}
+        alphaTest={0.3}
+        roughness={0.78}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }
@@ -742,6 +811,7 @@ function CoastQrPebbles({ text, spec }: { text: string; spec: SceneSpec }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const spriteTex = useMemo(() => makeFlowerSpriteTexture(), [])
   useEffect(() => () => spriteTex.dispose(), [spriteTex])
+  const isMoon = resolveSceneTheme(spec).mood.id === 'coast_moonbay'
 
   const { pts, modSize } = useMemo(() => {
     try {
@@ -764,8 +834,8 @@ function CoastQrPebbles({ text, spec }: { text: string; spec: SceneSpec }) {
     if (!mesh || pts.length === 0) return
     const dummy = new THREE.Object3D()
     const rnd = mulberry32(4321)
-    const cA = new THREE.Color('#274d5c')
-    const cB = new THREE.Color('#3a6978')
+    const cA = new THREE.Color(isMoon ? '#a5f3fc' : '#274d5c')
+    const cB = new THREE.Color(isMoon ? '#38e8ff' : '#3a6978')
 
     pts.forEach((p, i) => {
       const x = -1.04 + (p[0] - 0.5) * 0.82
@@ -780,13 +850,21 @@ function CoastQrPebbles({ text, spec }: { text: string; spec: SceneSpec }) {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [pts, modSize, spec])
+  }, [pts, modSize, spec, isMoon])
 
   if (pts.length === 0) return null
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, pts.length]}>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial map={spriteTex} alphaTest={0.28} roughness={0.82} side={THREE.DoubleSide} />
+      <meshStandardMaterial
+        map={spriteTex}
+        emissive={isMoon ? '#67f2ff' : '#000000'}
+        emissiveMap={spriteTex}
+        emissiveIntensity={isMoon ? 0.42 : 0}
+        alphaTest={0.28}
+        roughness={0.82}
+        side={THREE.DoubleSide}
+      />
     </instancedMesh>
   )
 }

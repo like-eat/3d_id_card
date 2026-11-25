@@ -10,6 +10,7 @@ import {
   sunsetCoastSpec,
   templatePresets,
 } from '../contracts/scene-spec'
+import { getMoodSkin, resolveSceneTheme } from '../contracts/moods'
 import { getAccessoryInfo } from '../contracts/accessories'
 import { getMbtiInfo } from '../contracts/mbti'
 import { CardScene, hasWebGL, type ViewPreset } from '../scene-engine/CardScene'
@@ -230,7 +231,17 @@ export function CardViewerPage({ slug }: { slug: string }) {
   useEffect(() => {
     const demo = DEMO_CARDS[slug]
     if (demo) {
-      setCard(demo)
+      const qIdx = location.hash.indexOf('?')
+      const moodQuery = qIdx >= 0 ? new URLSearchParams(location.hash.slice(qIdx + 1)).get('mood') : null
+      if (moodQuery && demo.published_spec) {
+        const nextSpec = JSON.parse(JSON.stringify(demo.published_spec)) as typeof demo.published_spec
+        const skin = getMoodSkin(nextSpec.template, moodQuery)
+        nextSpec.mood = skin.id
+        nextSpec.environment.lighting.preset = skin.lightingPreset
+        setCard({ ...demo, scene_spec: nextSpec, published_spec: nextSpec })
+      } else {
+        setCard(demo)
+      }
       setError(null)
       setLoading(false)
       return
@@ -293,7 +304,8 @@ export function CardViewerPage({ slug }: { slug: string }) {
   }
   const mbtiInfo = getMbtiInfo(profile.mbti)
   const accInfo = getAccessoryInfo(profile.accessory)
-  const isDark = parsed.spec.template === 'city'
+  const sceneTheme = resolveSceneTheme(parsed.spec)
+  const isDark = sceneTheme.isDark
   const tplIdx = Math.max(0, templatePresets.findIndex((t) => t.id === parsed.spec.template))
   const publicUrl = withShareCode(location.href.split('#')[0] + '#/card/' + slug)
 
@@ -332,7 +344,9 @@ export function CardViewerPage({ slug }: { slug: string }) {
       <button
         type="button"
         className="viewer-remake"
-        onClick={() => go(`/editor?tpl=${tplIdx}`)}
+        onClick={() =>
+          go(`/editor?tpl=${tplIdx}${parsed.spec.mood ? `&mood=${encodeURIComponent(parsed.spec.mood)}` : ''}`)
+        }
       >
         ✨ 做一张同款
       </button>
