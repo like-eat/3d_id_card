@@ -907,3 +907,95 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   background: transparent;
   cursor: pointer;
 }
+
+/* ---------- 自定义头像/照片立牌上传面板与公开页头像 ---------- */
+.avatar-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.avatar-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--text-dim);
+}
+.avatar-preview.polaroid {
+  border-radius: 8px;
+  border-color: #f4efe6;
+}
+.avatar-controls {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.avatar-actions button,
+.avatar-actions label.avatar-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.avatar-actions label.avatar-upload-btn:hover,
+.avatar-actions button:hover {
+  border-color: var(--accent);
+}
+.avatar-frames {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.frame-chip {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.frame-chip.active {
+  background: rgba(111, 195, 160, 0.16);
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.viewer .intro-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.viewer-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  flex: none;
+}

@@ -1,7 +1,72 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getAccessoryInfo } from '../contracts/accessories'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
+
+const ACCESSORY_QUOTES: Record<string, string[]> = {
+  cat: ['喵~ 很高兴认识你！', '摸摸头，今天也要开心呀', '正在打盹…点我干嘛喵'],
+  dog: ['汪汪！随时保持好心情', '摇摇尾巴，欢迎来交朋友！', '今天散步吗？汪~'],
+  camera: ['咔嚓！留住最闪亮的瞬间', '笑一个，正在对焦中 ✨', '好构图，今天灵感爆棚'],
+  coffee: ['来杯手冲，慢慢聊 ☕', '热拿铁已备好，请慢用', '咖啡续航 100%，灵感上线'],
+  laptop: ['代码编译通过！零 Bug', '正在把创意变成现实 💻', '深夜灵感，Keyboard on fire'],
+  guitar: ['♪ 弹一首轻快的布鲁斯给你', '生活需要一点即兴旋律 🎸', '和弦拨动，好心情起飞'],
+  easel: ['用色彩记录微缩世界 🎨', '这一笔留给未来的奇迹', '调色盘已就绪，开始创作'],
+  rocket: ['3…2…1… 灵感发射！🚀', '全速推进，奔赴下一站星辰', '推进器已点火，准备起飞'],
+}
+
+/** 通用小火花 / 音符飞溅特效（用于吉他与画架点击彩蛋） */
+function SparkBurst({ burstTrigger, colors }: { burstTrigger: number; colors: string[] }) {
+  const groupRef = useRef<THREE.Group>(null)
+  const tapTimeRef = useRef(-99)
+  const items = useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, i) => {
+        const ang = (i / 6) * Math.PI * 2 + 0.3
+        return { ang, col: colors[i % colors.length], speed: 0.14 + (i % 2) * 0.05 }
+      }),
+    [colors],
+  )
+
+  useFrame(({ clock }) => {
+    const grp = groupRef.current
+    if (!grp) return
+    if (burstTrigger === 0) {
+      grp.visible = false
+      return
+    }
+    if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - tapTimeRef.current
+    if (age > 1.3) {
+      grp.visible = false
+      return
+    }
+    grp.visible = true
+    const p = age / 1.3
+    const fade = Math.sin(p * Math.PI)
+    grp.children.forEach((child, idx) => {
+      const item = items[idx]
+      const r = 0.04 + p * item.speed
+      child.position.set(Math.cos(item.ang) * r, Math.sin(item.ang) * r * 0.6, 0.22 + p * 0.22)
+      child.scale.setScalar((0.75 + fade * 0.6) * (1 - p * 0.35))
+    })
+  })
+
+  useEffect(() => {
+    if (burstTrigger > 0) tapTimeRef.current = -1
+  }, [burstTrigger])
+
+  return (
+    <group ref={groupRef} visible={false}>
+      {items.map((item, idx) => (
+        <mesh key={idx}>
+          <octahedronGeometry args={[0.018, 0]} />
+          <meshBasicMaterial color={item.col} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
 
 /* ---------------- 程序化小贴图（咖啡拉花 / 电脑屏幕 / 画布油画） ---------------- */
 
@@ -330,7 +395,34 @@ function MiniDog() {
 
 /* ---------------- 3. 复古单反相机（金属顶盖 + 蓝膜大镜头） ---------------- */
 
-function MiniCamera() {
+function MiniCamera({ burstTrigger }: { burstTrigger: number }) {
+  const flashRef = useRef<THREE.Mesh>(null)
+  const flashLightRef = useRef<THREE.PointLight>(null)
+  const tapTimeRef = useRef(-99)
+
+  useEffect(() => {
+    if (burstTrigger > 0) tapTimeRef.current = -1
+  }, [burstTrigger])
+
+  useFrame(({ clock }) => {
+    if (burstTrigger === 0) {
+      if (flashRef.current) flashRef.current.visible = false
+      if (flashLightRef.current) flashLightRef.current.intensity = 0
+      return
+    }
+    if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - tapTimeRef.current
+    const glow = age < 0.45 ? Math.sin((age / 0.45) * Math.PI) : 0
+    if (flashRef.current) {
+      flashRef.current.visible = glow > 0.02
+      flashRef.current.scale.setScalar(0.8 + glow * 1.4)
+      ;(flashRef.current.material as THREE.MeshBasicMaterial).opacity = glow * 0.92
+    }
+    if (flashLightRef.current) {
+      flashLightRef.current.intensity = glow * 3.2
+    }
+  })
+
   return (
     <group>
       <mesh position={[0, 0, 0.008]} rotation={[Math.PI / 2, 0, 0]} receiveShadow castShadow>
@@ -377,32 +469,50 @@ function MiniCamera() {
         <sphereGeometry args={[0.044, 18, 12]} />
         <meshStandardMaterial color="#1d4ed8" metalness={0.92} roughness={0.08} emissive="#0f295c" emissiveIntensity={0.35} />
       </mesh>
+      {/* 相机闪光灯球与高光 */}
+      <mesh ref={flashRef} position={[0, -0.12, 0.14]} visible={false}>
+        <sphereGeometry args={[0.048, 12, 12]} />
+        <meshBasicMaterial color="#fffbe6" transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <pointLight ref={flashLightRef} position={[0, -0.18, 0.16]} color="#fff7d6" intensity={0} distance={1.1} />
     </group>
   )
 }
 
 /* ---------------- 4. 拿铁咖啡杯（陶瓷杯 + 拉花 + 上升热气） ---------------- */
 
-function MiniCoffee() {
+function MiniCoffee({ burstTrigger }: { burstTrigger: number }) {
   const latteTex = useMemo(() => makeLatteArtTexture(), [])
   useEffect(() => () => latteTex.dispose(), [latteTex])
 
   const steam1 = useRef<THREE.Mesh>(null)
   const steam2 = useRef<THREE.Mesh>(null)
+  const tapTimeRef = useRef(-99)
+
+  useEffect(() => {
+    if (burstTrigger > 0) tapTimeRef.current = -1
+  }, [burstTrigger])
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
+    let boost = 0
+    if (burstTrigger > 0) {
+      if (tapTimeRef.current < 0) tapTimeRef.current = t
+      const age = t - tapTimeRef.current
+      if (age < 2.2) boost = 1 - age / 2.2
+    }
+    const spd = 0.45 + boost * 0.9
     if (steam1.current) {
-      const p = (t * 0.45) % 1
-      steam1.current.position.set(-0.02 + Math.sin(t * 2) * 0.012, 0, 0.23 + p * 0.12)
-      steam1.current.scale.setScalar(1 + p * 0.6)
-      ;(steam1.current.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * 0.38
+      const p = (t * spd) % 1
+      steam1.current.position.set(-0.02 + Math.sin(t * 2.5) * 0.015, 0, 0.23 + p * (0.12 + boost * 0.14))
+      steam1.current.scale.setScalar((1 + p * 0.6) * (1 + boost * 0.55))
+      ;(steam1.current.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * (0.38 + boost * 0.36)
     }
     if (steam2.current) {
-      const p = (t * 0.45 + 0.5) % 1
-      steam2.current.position.set(0.025 + Math.cos(t * 2.2) * 0.012, -0.01, 0.23 + p * 0.12)
-      steam2.current.scale.setScalar(0.85 + p * 0.55)
-      ;(steam2.current.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * 0.32
+      const p = (t * spd + 0.5) % 1
+      steam2.current.position.set(0.025 + Math.cos(t * 2.7) * 0.015, -0.01, 0.23 + p * (0.12 + boost * 0.14))
+      steam2.current.scale.setScalar((0.85 + p * 0.55) * (1 + boost * 0.55))
+      ;(steam2.current.material as THREE.MeshBasicMaterial).opacity = Math.sin(p * Math.PI) * (0.32 + boost * 0.36)
     }
   })
 
@@ -506,7 +616,7 @@ function MiniLaptop() {
 
 /* ---------------- 6. 民谣木吉他（琴架立姿 + 音孔琴弦） ---------------- */
 
-function MiniGuitar() {
+function MiniGuitar({ burstTrigger }: { burstTrigger: number }) {
   return (
     <group>
       {/* 黑色小圆盘吉他座 */}
@@ -559,13 +669,14 @@ function MiniGuitar() {
           </mesh>
         ))}
       </group>
+      <SparkBurst burstTrigger={burstTrigger} colors={['#fbbf24', '#f472b6', '#60a5fa']} />
     </group>
   )
 }
 
 /* ---------------- 7. 艺术画架（木制三角架 + 印象派花山小油画） ---------------- */
 
-function MiniEasel() {
+function MiniEasel({ burstTrigger }: { burstTrigger: number }) {
   const paintTex = useMemo(() => makePaintingTexture(), [])
   useEffect(() => () => paintTex.dispose(), [paintTex])
 
@@ -606,19 +717,31 @@ function MiniEasel() {
           <meshStandardMaterial map={paintTex} roughness={0.82} />
         </mesh>
       </group>
+      <SparkBurst burstTrigger={burstTrigger} colors={['#f43f5e', '#facc15', '#34d399', '#38bdf8']} />
     </group>
   )
 }
 
 /* ---------------- 8. 宇航火箭（金属箭体 + 红翼 + 呼吸尾焰） ---------------- */
 
-function MiniRocket() {
+function MiniRocket({ burstTrigger }: { burstTrigger: number }) {
   const flameRef = useRef<THREE.Mesh>(null)
+  const tapTimeRef = useRef(-99)
+
+  useEffect(() => {
+    if (burstTrigger > 0) tapTimeRef.current = -1
+  }, [burstTrigger])
 
   useFrame(({ clock }) => {
     if (flameRef.current) {
-      const s = 0.88 + Math.sin(clock.elapsedTime * 11) * 0.14
-      flameRef.current.scale.set(1, 1, s)
+      let boost = 0
+      if (burstTrigger > 0) {
+        if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+        const age = clock.elapsedTime - tapTimeRef.current
+        if (age < 1.6) boost = Math.sin((age / 1.6) * Math.PI)
+      }
+      const s = 0.88 + Math.sin(clock.elapsedTime * (11 + boost * 14)) * 0.14 + boost * 1.15
+      flameRef.current.scale.set(1 + boost * 0.35, 1 + boost * 0.35, s)
     }
   })
 
@@ -679,28 +802,109 @@ function MiniRocket() {
 
 export function MicroAccessory({
   accessory,
+  greeting,
   position,
   scale = 1,
   rotZ = 0,
 }: {
   accessory?: string
+  greeting?: string
   position: [number, number, number]
   scale?: number
   rotZ?: number
 }) {
   const info = getAccessoryInfo(accessory)
+  const [tapTrigger, setTapTrigger] = useState(0)
+  const animRef = useRef<THREE.Group>(null)
+  const tapTimeRef = useRef(-99)
+
+  useEffect(() => () => setPointerCursor(false), [])
+
+  useFrame(({ clock }) => {
+    const grp = animRef.current
+    if (!grp) return
+    if (tapTrigger === 0) {
+      grp.position.z = 0
+      grp.rotation.y = 0
+      return
+    }
+    if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - tapTimeRef.current
+    if (!info) return
+
+    if (info.id === 'rocket') {
+      const dur = 1.5
+      if (age < dur) {
+        const p = age / dur
+        grp.position.z = Math.sin(p * Math.PI) * 0.28
+        grp.rotation.z = Math.sin(p * Math.PI * 3) * 0.08
+      } else {
+        grp.position.z = 0
+        grp.rotation.z = 0
+      }
+    } else if (info.id === 'cat' || info.id === 'dog') {
+      const dur = 1.15
+      if (age < dur) {
+        const p = age / dur
+        grp.position.z = Math.abs(Math.sin(p * Math.PI * 2)) * 0.125
+        grp.rotation.y = Math.sin(p * Math.PI * 4) * 0.14
+      } else {
+        grp.position.z = 0
+        grp.rotation.y = 0
+      }
+    } else {
+      const dur = 0.9
+      if (age < dur) {
+        const p = age / dur
+        grp.position.z = Math.sin(p * Math.PI) * 0.08
+        grp.rotation.y = Math.sin(p * Math.PI * 2) * 0.09
+      } else {
+        grp.position.z = 0
+        grp.rotation.y = 0
+      }
+    }
+  })
+
   if (!info) return null
 
+  const quotes = ACCESSORY_QUOTES[info.id] ?? ['你好呀！']
+  const bubbleText = greeting?.trim() || quotes[(tapTrigger - 1) % quotes.length] || quotes[0]
+
   return (
-    <group position={position} rotation={[0, 0, rotZ]} scale={scale}>
-      {info.id === 'cat' && <MiniCat />}
-      {info.id === 'dog' && <MiniDog />}
-      {info.id === 'camera' && <MiniCamera />}
-      {info.id === 'coffee' && <MiniCoffee />}
-      {info.id === 'laptop' && <MiniLaptop />}
-      {info.id === 'guitar' && <MiniGuitar />}
-      {info.id === 'easel' && <MiniEasel />}
-      {info.id === 'rocket' && <MiniRocket />}
+    <group
+      position={position}
+      rotation={[0, 0, rotZ]}
+      scale={scale}
+      onClick={(e) => {
+        if (!isTapEvent(e)) return
+        tapTimeRef.current = -1
+        setTapTrigger((n) => n + 1)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setPointerCursor(true)
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation()
+        setPointerCursor(false)
+      }}
+    >
+      <group ref={animRef}>
+        {info.id === 'cat' && <MiniCat />}
+        {info.id === 'dog' && <MiniDog />}
+        {info.id === 'camera' && <MiniCamera burstTrigger={tapTrigger} />}
+        {info.id === 'coffee' && <MiniCoffee burstTrigger={tapTrigger} />}
+        {info.id === 'laptop' && <MiniLaptop />}
+        {info.id === 'guitar' && <MiniGuitar burstTrigger={tapTrigger} />}
+        {info.id === 'easel' && <MiniEasel burstTrigger={tapTrigger} />}
+        {info.id === 'rocket' && <MiniRocket burstTrigger={tapTrigger} />}
+      </group>
+      <SpeechBubble3D
+        text={bubbleText}
+        accent={info.accent}
+        triggerId={tapTrigger}
+        position={[0, 0, 0.5]}
+      />
     </group>
   )
 }

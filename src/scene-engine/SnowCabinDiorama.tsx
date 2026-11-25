@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
@@ -7,6 +7,7 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
 import {
   fbm,
   makeCabinWallTexture,
@@ -190,28 +191,108 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   }, [wallTex, gableGeo])
 
   const smokeGroupRef = useRef<THREE.Group>(null)
+  const burstSmokeRef = useRef<THREE.Group>(null)
+  const lampLightRef = useRef<THREE.PointLight>(null)
+  const winMatRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([])
+  const [warmId, setWarmId] = useState(0)
+  const tapTimeRef = useRef(-99)
   const smokeItems = useMemo(() => Array.from({ length: 6 }, (_, i) => i / 6), [])
-
-  useFrame(({ clock }) => {
-    const grp = smokeGroupRef.current
-    if (!grp) return
-    const t = clock.elapsedTime
-    grp.children.forEach((child, idx) => {
-      const p = (smokeItems[idx] + t * 0.24) % 1
-      child.position.set(Math.sin(t * 1.4 + idx) * 0.02 + p * 0.04, p * 0.02, p * 0.28)
-      child.scale.setScalar(0.65 + p * 1.35)
-      const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial
-      mat.opacity = Math.sin(p * Math.PI) * 0.42
-    })
-  })
+  const burstItems = useMemo(() => Array.from({ length: 12 }, (_, i) => i), [])
+  useEffect(() => () => setPointerCursor(false), [])
 
   const moodId = resolveSceneTheme(spec).mood.id
   const isAurora = moodId === 'snow_aurora'
   const isDusk = moodId === 'snow_dusk'
   const winEmissive = isAurora ? 1.82 : isDusk ? 1.45 : 1.18
+  const baseLightIntensity = isAurora ? 1.55 : isDusk ? 1.15 : 0.72
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime
+    let boost = 0
+    if (side === 1 && warmId > 0) {
+      if (tapTimeRef.current < 0) tapTimeRef.current = t
+      const age = t - tapTimeRef.current
+      if (age < 2.8) boost = Math.sin((age / 2.8) * Math.PI)
+
+      const burstGrp = burstSmokeRef.current
+      if (burstGrp) {
+        if (age < 2.8) {
+          burstGrp.visible = true
+          burstGrp.children.forEach((child, idx) => {
+            const delay = idx * 0.1
+            const life = age - delay
+            if (life <= 0 || life > 2.0) {
+              child.visible = false
+              return
+            }
+            const p = life / 2.0
+            child.visible = true
+            child.position.set(
+              Math.sin(t * 2.2 + idx * 1.1) * 0.045 + p * 0.09,
+              Math.cos(t * 1.8 + idx) * 0.025 + p * 0.04,
+              p * 0.56,
+            )
+            child.scale.setScalar(0.85 + p * 1.9)
+            const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial
+            mat.opacity = Math.sin(p * Math.PI) * 0.72
+          })
+        } else {
+          burstGrp.visible = false
+        }
+      }
+    } else if (burstSmokeRef.current) {
+      burstSmokeRef.current.visible = false
+    }
+
+    if (lampLightRef.current) {
+      lampLightRef.current.intensity = baseLightIntensity + boost * 1.5
+    }
+    winMatRefs.current.forEach((mat, idx) => {
+      if (mat) mat.emissiveIntensity = (winEmissive + boost * 1.45) * (idx >= 2 ? 0.92 : 1)
+    })
+
+    const grp = smokeGroupRef.current
+    if (!grp) return
+    grp.children.forEach((child, idx) => {
+      const p = (smokeItems[idx] + t * (0.24 + boost * 0.18)) % 1
+      child.position.set(Math.sin(t * 1.4 + idx) * 0.02 + p * 0.04, p * 0.02, p * (0.28 + boost * 0.1))
+      child.scale.setScalar((0.65 + p * 1.35) * (1 + boost * 0.35))
+      const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial
+      mat.opacity = Math.sin(p * Math.PI) * (0.42 + boost * 0.28)
+    })
+  })
 
   return (
-    <group position={[cx, cy, cz]} rotation={[0, 0, -0.34]} scale={0.94}>
+    <group
+      position={[cx, cy, cz]}
+      rotation={[0, 0, -0.34]}
+      scale={0.94}
+      onClick={
+        side === 1
+          ? (e) => {
+              if (!isTapEvent(e)) return
+              tapTimeRef.current = -1
+              setWarmId((n) => n + 1)
+            }
+          : undefined
+      }
+      onPointerOver={
+        side === 1
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(true)
+            }
+          : undefined
+      }
+      onPointerOut={
+        side === 1
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(false)
+            }
+          : undefined
+      }
+    >
       {/* 石砌厚实小地基（稳稳嵌入雪坡） */}
       <mesh position={[0, 0, 0.024]} castShadow receiveShadow>
         <boxGeometry args={[0.48, 0.38, 0.068]} />
@@ -230,6 +311,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       <mesh position={[0, -0.161, 0.145]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.42, 0.19]} />
         <meshStandardMaterial
+          ref={(el) => { winMatRefs.current[0] = el }}
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
@@ -240,6 +322,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       <mesh position={[0, 0.161, 0.145]} rotation={[Math.PI / 2, Math.PI, 0]}>
         <planeGeometry args={[0.42, 0.19]} />
         <meshStandardMaterial
+          ref={(el) => { winMatRefs.current[1] = el }}
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
@@ -251,6 +334,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       <mesh position={[0.211, 0, 0.145]} rotation={[Math.PI / 2, Math.PI / 2, 0]}>
         <planeGeometry args={[0.32, 0.19]} />
         <meshStandardMaterial
+          ref={(el) => { winMatRefs.current[2] = el }}
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
@@ -261,6 +345,7 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       <mesh position={[-0.211, 0, 0.145]} rotation={[Math.PI / 2, -Math.PI / 2, 0]}>
         <planeGeometry args={[0.32, 0.19]} />
         <meshStandardMaterial
+          ref={(el) => { winMatRefs.current[3] = el }}
           map={wallTex.map}
           emissive="#ffaa44"
           emissiveMap={wallTex.emissiveMap}
@@ -284,9 +369,10 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
       </mesh>
       {side === 1 && (
         <pointLight
+          ref={lampLightRef}
           position={[0, -0.24, 0.18]}
           distance={isAurora ? 1.55 : isDusk ? 1.25 : 0.92}
-          intensity={isAurora ? 1.55 : isDusk ? 1.15 : 0.72}
+          intensity={baseLightIntensity}
           color="#ffb863"
         />
       )}
@@ -328,6 +414,26 @@ function AlpineWoodCabin({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
           </mesh>
         ))}
       </group>
+      {/* 点击木屋升起浓暖炊烟团 + 欢迎气泡 */}
+      {side === 1 && (
+        <group ref={burstSmokeRef} position={[0.115, 0.08, 0.43]} visible={false}>
+          {burstItems.map((idx) => (
+            <mesh key={idx}>
+              <sphereGeometry args={[0.034, 10, 10]} />
+              <meshBasicMaterial color="#eef5ff" transparent opacity={0} depthWrite={false} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {side === 1 && (
+        <SpeechBubble3D
+          text="🔥 炉火正暖，进来喝杯热茶"
+          accent="#d97706"
+          triggerId={warmId}
+          position={[0, 0, 0.74]}
+          scale={1.15}
+        />
+      )}
 
       {/* 屋侧堆叠的迷你原木柴垛 */}
       {[
@@ -922,12 +1028,17 @@ export function SnowCabinDioramaCard({
         />
         <MbtiStandee
           mbti={profile.mbti}
+          avatarUrl={profile.avatarUrl}
+          avatarFrame={profile.avatarFrame}
+          name={profile.name}
+          greeting={profile.greeting}
           position={[-0.2, 0.04, THIN_T / 2 + snowSurfaceZ(-0.2, 0.04, spec, 1) + 0.04]}
           scale={1.06}
           rotZ={0.3}
         />
         <MicroAccessory
           accessory={profile.accessory}
+          greeting={profile.greeting}
           position={[0.42, -0.56, THIN_T / 2 + snowSurfaceZ(0.42, -0.56, spec, 1) + 0.025]}
           scale={1.0}
           rotZ={-0.25}

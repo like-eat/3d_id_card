@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
@@ -7,6 +7,7 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
 import {
   fbm,
   makeFlowerSpriteTexture,
@@ -500,8 +501,17 @@ function RealisticBroadleafTrees({ side, spec, quality }: { side: 1 | -1; spec: 
 
 function MirrorLake({ spec }: { spec: SceneSpec }) {
   const matRef = useRef<THREE.ShaderMaterial>(null)
+  const rippleRef = useRef<THREE.Mesh>(null)
+  const dustRef = useRef<THREE.Group>(null)
+  const [rippleId, setRippleId] = useState(0)
+  const tapTimeRef = useRef(-99)
   const skyTex = useMemo(() => makeLakeReflectionSkyTexture(), [])
   useEffect(() => () => skyTex.dispose(), [skyTex])
+  useEffect(() => () => setPointerCursor(false), [])
+  const dustSeeds = useMemo(
+    () => Array.from({ length: 8 }, (_, i) => ({ ang: (i / 8) * Math.PI * 2, rad: 0.1 + (i % 3) * 0.06 })),
+    [],
+  )
 
   // 有机水洼形状（ShapeGeometry）
   const lakeGeo = useMemo(() => {
@@ -537,15 +547,64 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
   }, [uniforms, isNight, isAutumn])
 
   useFrame(({ clock }) => {
+    const t = clock.elapsedTime
     if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.elapsedTime
+      matRef.current.uniforms.uTime.value = t
+    }
+    if (rippleId > 0) {
+      if (tapTimeRef.current < 0) tapTimeRef.current = t
+      const age = t - tapTimeRef.current
+      if (rippleRef.current) {
+        if (age < 1.4) {
+          const rp = age / 1.4
+          rippleRef.current.visible = true
+          rippleRef.current.scale.setScalar(0.5 + rp * 4.5)
+          ;(rippleRef.current.material as THREE.MeshBasicMaterial).opacity = (1 - rp) * 0.72
+        } else {
+          rippleRef.current.visible = false
+        }
+      }
+      if (dustRef.current) {
+        if (age < 1.9) {
+          const dp = age / 1.9
+          const fade = Math.sin(dp * Math.PI)
+          dustRef.current.visible = true
+          dustRef.current.children.forEach((child, idx) => {
+            const d = dustSeeds[idx]
+            const r = d.rad + dp * 0.14
+            child.position.set(Math.cos(d.ang + age) * r, Math.sin(d.ang + age) * r * 0.8, 0.04 + dp * 0.34)
+            child.scale.setScalar(0.7 + fade * 0.7)
+          })
+        } else {
+          dustRef.current.visible = false
+        }
+      }
+    } else {
+      if (rippleRef.current) rippleRef.current.visible = false
+      if (dustRef.current) dustRef.current.visible = false
     }
   })
 
   if (!spec.environment.water.enabled) return null
 
   return (
-    <mesh geometry={lakeGeo} position={[LAKE_CX, LAKE_CY, THIN_T / 2 + 0.032]}>
+    <group
+      position={[LAKE_CX, LAKE_CY, THIN_T / 2 + 0.032]}
+      onClick={(e) => {
+        if (!isTapEvent(e)) return
+        tapTimeRef.current = -1
+        setRippleId((n) => n + 1)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setPointerCursor(true)
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation()
+        setPointerCursor(false)
+      }}
+    >
+      <mesh geometry={lakeGeo}>
       <shaderMaterial
         ref={matRef}
         transparent
@@ -605,6 +664,26 @@ function MirrorLake({ spec }: { spec: SceneSpec }) {
         `}
       />
     </mesh>
+      <mesh ref={rippleRef} position={[0, 0, 0.014]} visible={false}>
+        <ringGeometry args={[0.06, 0.085, 32]} />
+        <meshBasicMaterial color="#d9f99d" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <group ref={dustRef} visible={false}>
+        {dustSeeds.map((_, i) => (
+          <mesh key={i}>
+            <sphereGeometry args={[0.013, 8, 8]} />
+            <meshBasicMaterial color="#bbf7d0" />
+          </mesh>
+        ))}
+      </group>
+      <SpeechBubble3D
+        text="🌲 听见晨雾与风的声音"
+        accent="#3b825e"
+        triggerId={rippleId}
+        position={[0, 0, 0.46]}
+        scale={1.08}
+      />
+    </group>
   )
 }
 
@@ -928,12 +1007,17 @@ export function ForestDioramaCard({
         />
         <MbtiStandee
           mbti={profile.mbti}
+          avatarUrl={profile.avatarUrl}
+          avatarFrame={profile.avatarFrame}
+          name={profile.name}
+          greeting={profile.greeting}
           position={[-0.22, 0.08, THIN_T / 2 + forestSurfaceZ(-0.22, 0.08, spec, 1) + 0.055]}
           scale={1.08}
           rotZ={0.32}
         />
         <MicroAccessory
           accessory={profile.accessory}
+          greeting={profile.greeting}
           position={[0.48, -0.56, THIN_T / 2 + forestSurfaceZ(0.48, -0.56, spec, 1) + 0.035]}
           scale={1.0}
           rotZ={-0.24}

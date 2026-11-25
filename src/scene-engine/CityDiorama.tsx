@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
@@ -7,6 +7,7 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
 import {
   makeCircuitBoardTextures,
   makeLightDotTexture,
@@ -76,17 +77,25 @@ function QuantumCoreAssembly({
   scale = 1,
   accent,
   secondary,
+  interactive = true,
 }: {
   position: [number, number, number]
   scale?: number
   accent: string
   secondary: string
+  interactive?: boolean
 }) {
   const coreRef = useRef<THREE.Mesh>(null)
   const ring1Ref = useRef<THREE.Mesh>(null)
   const ring2Ref = useRef<THREE.Mesh>(null)
   const ring3Ref = useRef<THREE.Mesh>(null)
   const particlesRef = useRef<THREE.InstancedMesh>(null)
+  const shockwaveRef = useRef<THREE.Mesh>(null)
+  const coreLightRef = useRef<THREE.PointLight>(null)
+  const [chargeId, setChargeId] = useState(0)
+  const tapTimeRef = useRef(-99)
+  const phaseRef = useRef(0)
+  useEffect(() => () => setPointerCursor(false), [])
 
   const particles = useMemo(() => {
     const rnd = mulberry32(70701)
@@ -101,30 +110,56 @@ function QuantumCoreAssembly({
 
   const dummy = useMemo(() => new THREE.Object3D(), [])
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime
+    let boost = 0
+    if (interactive && chargeId > 0) {
+      if (tapTimeRef.current < 0) tapTimeRef.current = t
+      const age = t - tapTimeRef.current
+      if (age < 2.2) boost = Math.max(0, 1 - age / 2.2)
+      if (shockwaveRef.current) {
+        if (age < 1.25) {
+          const rp = age / 1.25
+          shockwaveRef.current.visible = true
+          shockwaveRef.current.scale.setScalar(0.65 + rp * 2.25)
+          ;(shockwaveRef.current.material as THREE.MeshBasicMaterial).opacity = (1 - rp) * 0.82
+        } else {
+          shockwaveRef.current.visible = false
+        }
+      }
+    } else if (shockwaveRef.current) {
+      shockwaveRef.current.visible = false
+    }
+
+    phaseRef.current += Math.min(delta, 0.05) * (1 + boost * 3.4)
+    const pt = phaseRef.current
+
+    if (coreLightRef.current) {
+      coreLightRef.current.intensity = 2.25 + boost * 2.4
+    }
     if (coreRef.current) {
-      coreRef.current.rotation.z = t * 0.85
-      coreRef.current.rotation.x = t * 0.55
-      coreRef.current.position.z = 0.42 + Math.sin(t * 2.1) * 0.025
+      coreRef.current.rotation.z = pt * 0.85
+      coreRef.current.rotation.x = pt * 0.55
+      coreRef.current.position.z = 0.42 + Math.sin(t * 2.1) * 0.025 + boost * 0.04
+      coreRef.current.scale.setScalar(1 + boost * 0.18)
     }
     if (ring1Ref.current) {
       ring1Ref.current.rotation.x = Math.PI * 0.36 + Math.sin(t * 0.7) * 0.15
-      ring1Ref.current.rotation.y = t * 0.65
+      ring1Ref.current.rotation.y = pt * 0.65
     }
     if (ring2Ref.current) {
       ring2Ref.current.rotation.x = -Math.PI * 0.28
-      ring2Ref.current.rotation.y = -t * 0.5
-      ring2Ref.current.rotation.z = t * 0.3
+      ring2Ref.current.rotation.y = -pt * 0.5
+      ring2Ref.current.rotation.z = pt * 0.3
     }
     if (ring3Ref.current) {
-      ring3Ref.current.rotation.z = t * 0.45
+      ring3Ref.current.rotation.z = pt * 0.45
     }
     if (particlesRef.current) {
       particles.forEach((p, i) => {
-        const a = p.ang + t * p.speed
+        const a = p.ang + pt * p.speed
         dummy.position.set(Math.cos(a) * p.rad, Math.sin(a) * p.rad, p.z + Math.sin(t * 1.8 + i) * 0.02)
-        dummy.scale.setScalar(p.s)
+        dummy.scale.setScalar(p.s * (1 + boost * 0.5))
         dummy.updateMatrix()
         particlesRef.current!.setMatrixAt(i, dummy.matrix)
       })
@@ -133,7 +168,35 @@ function QuantumCoreAssembly({
   })
 
   return (
-    <group position={position} scale={scale}>
+    <group
+      position={position}
+      scale={scale}
+      onClick={
+        interactive
+          ? (e) => {
+              if (!isTapEvent(e)) return
+              tapTimeRef.current = -1
+              setChargeId((n) => n + 1)
+            }
+          : undefined
+      }
+      onPointerOver={
+        interactive
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(true)
+            }
+          : undefined
+      }
+      onPointerOut={
+        interactive
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(false)
+            }
+          : undefined
+      }
+    >
       {/* 阶梯阳极氧化钛金属反应基座 */}
       <mesh position={[0, 0, 0.025]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.34, 0.39, 0.05, 24]} />
@@ -210,7 +273,21 @@ function QuantumCoreAssembly({
       </instancedMesh>
 
       {/* 核心散发出的环境光，照亮周围电路与金属模块 */}
-      <pointLight position={[0, 0, 0.44]} intensity={2.25} distance={2.9} color={accent} />
+      <pointLight ref={coreLightRef} position={[0, 0, 0.44]} intensity={2.25} distance={2.9} color={accent} />
+      {/* 充能冲击全息光环 + 彩蛋气泡 */}
+      <mesh ref={shockwaveRef} position={[0, 0, 0.14]} visible={false}>
+        <ringGeometry args={[0.18, 0.24, 48]} />
+        <meshBasicMaterial color={accent} transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {interactive && (
+        <SpeechBubble3D
+          text="⚡ 量子核芯 · 能量满载"
+          accent={accent}
+          triggerId={chargeId}
+          position={[0, 0, 0.88]}
+          scale={1.08}
+        />
+      )}
     </group>
   )
 }
@@ -664,12 +741,17 @@ export function CityDioramaCard({
         />
         <MbtiStandee
           mbti={profile.mbti}
+          avatarUrl={profile.avatarUrl}
+          avatarFrame={profile.avatarFrame}
+          name={profile.name}
+          greeting={profile.greeting}
           position={[0.28, -0.58, THIN_T / 2 + 0.005]}
           scale={1.08}
           rotZ={0.32}
         />
         <MicroAccessory
           accessory={profile.accessory}
+          greeting={profile.greeting}
           position={[0.92, -0.56, THIN_T / 2 + 0.006]}
           scale={1.0}
           rotZ={-0.28}
@@ -679,7 +761,7 @@ export function CityDioramaCard({
       {/* 背面（绕 X 轴翻转 180°）：镜像量子科技世界 + 精细全息矩阵二维码 + 斜排全息字 */}
       <group rotation={[Math.PI, 0, 0]}>
         <CircuitWaferFace side={-1} accent={accent} />
-        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={0.96} accent={accent} secondary={secondary} />
+        <QuantumCoreAssembly position={[0.56, 0.16, THIN_T / 2]} scale={0.96} accent={accent} secondary={secondary} interactive={false} />
         <QuantumModules side={-1} spec={spec} accent={accent} secondary={secondary} />
         <DataBusPulses side={-1} accent={accent} secondary={secondary} />
         <HoloQrMatrix text={qrText} accent={accent} />

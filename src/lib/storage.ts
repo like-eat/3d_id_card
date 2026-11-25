@@ -106,3 +106,110 @@ export async function photoToDataUrl(file: File, maxSize = 640): Promise<string>
     URL.revokeObjectURL(url)
   }
 }
+
+
+/** 将用户头像/照片居中裁剪并压缩为正方形 DataURL（免登录草稿与跨端海报安全导出） */
+export async function cropAvatarDataUrl(file: File, size = 256): Promise<string> {
+  if (!ACCEPTED_TYPES.includes(file.type)) {
+    throw new Error('仅支持 JPG / PNG / WebP 格式图片')
+  }
+  if (file.size > MAX_SIZE) {
+    throw new Error('单张照片大小不能超过 15 MB')
+  }
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => reject(new Error('图片读取失败，请换一张重试'))
+      i.src = url
+    })
+    const side = Math.min(img.width, img.height)
+    const sx = Math.max(0, (img.width - side) / 2)
+    const sy = Math.max(0, (img.height - side) / 2)
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size)
+    const webp = canvas.toDataURL('image/webp', 0.86)
+    if (webp.startsWith('data:image/webp')) return webp
+    return canvas.toDataURL('image/jpeg', 0.86)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** 生成一张暖阳系微缩头像示例图，供一键试用自定义照片立牌 */
+export function makeSampleAvatarDataUrl(): string {
+  const s = 256
+  const c = document.createElement('canvas')
+  c.width = c.height = s
+  const ctx = c.getContext('2d')!
+
+  // 柔和晨曦天空与远山背景
+  const bg = ctx.createLinearGradient(0, 0, 0, s)
+  bg.addColorStop(0, '#ffd8c4')
+  bg.addColorStop(0.55, '#ffe7cf')
+  bg.addColorStop(1, '#cde4dc')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, s, s)
+
+  // 暖阳与远山剪影
+  ctx.fillStyle = '#fff5d6'
+  ctx.beginPath()
+  ctx.arc(s * 0.72, s * 0.28, 28, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#7ba89b'
+  ctx.beginPath()
+  ctx.moveTo(0, s * 0.78)
+  ctx.quadraticCurveTo(s * 0.35, s * 0.58, s * 0.72, s * 0.72)
+  ctx.lineTo(s, s * 0.62)
+  ctx.lineTo(s, s)
+  ctx.lineTo(0, s)
+  ctx.fill()
+
+  // 居中治愈系小笑脸插画人偶
+  ctx.fillStyle = '#f29f7e'
+  ctx.beginPath()
+  ctx.arc(s / 2, s * 0.86, 56, Math.PI, 0)
+  ctx.fill()
+
+  // 头发与圆脸
+  ctx.fillStyle = '#33292a'
+  ctx.beginPath()
+  ctx.arc(s / 2, s * 0.48, 46, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.fillStyle = '#ffe5d4'
+  ctx.beginPath()
+  ctx.arc(s / 2, s * 0.51, 36, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 刘海与笑眼腮红
+  ctx.fillStyle = '#33292a'
+  ctx.beginPath()
+  ctx.arc(s / 2, s * 0.43, 36, Math.PI, 0)
+  ctx.fill()
+
+  ctx.strokeStyle = '#33292a'
+  ctx.lineWidth = 4
+  ctx.lineCap = 'round'
+  for (const ex of [s * 0.43, s * 0.57]) {
+    ctx.beginPath()
+    ctx.arc(ex, s * 0.52, 5, Math.PI, 0)
+    ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(244, 114, 182, 0.35)'
+  ctx.beginPath()
+  ctx.ellipse(s * 0.38, s * 0.56, 7, 4, 0, 0, Math.PI * 2)
+  ctx.ellipse(s * 0.62, s * 0.56, 7, 4, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.arc(s / 2, s * 0.57, 7, 0.15 * Math.PI, 0.85 * Math.PI)
+  ctx.stroke()
+
+  return c.toDataURL('image/png')
+}

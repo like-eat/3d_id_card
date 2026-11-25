@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
@@ -7,6 +7,7 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
 import {
   fbm,
   makeFlowerSpriteTexture,
@@ -272,6 +273,16 @@ function BeachUmbrella({
 function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const canopyTex = useMemo(() => makeUmbrellaCanopyTexture(), [])
   useEffect(() => () => canopyTex.dispose(), [canopyTex])
+  useEffect(() => () => setPointerCursor(false), [])
+
+  const umbrellaSpinRef = useRef<THREE.Group>(null)
+  const sparkleGroupRef = useRef<THREE.Group>(null)
+  const [chillId, setChillId] = useState(0)
+  const tapTimeRef = useRef(-99)
+  const sparkleSeeds = useMemo(
+    () => Array.from({ length: 8 }, (_, i) => ({ ang: (i / 8) * Math.PI * 2, rad: 0.14 + (i % 2) * 0.06 })),
+    [],
+  )
 
   // 正面：沙滩中前偏右，面朝广阔海湾；背面：右上偏中镜像点缀
   const cx = side === 1 ? -0.02 : 0.38
@@ -280,9 +291,86 @@ function BeachLoungeSet({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
   const facing = side === 1 ? -0.58 : -2.4
   const isMoon = resolveSceneTheme(spec).mood.id === 'coast_moonbay'
 
+  useFrame(({ clock }) => {
+    if (side !== 1 || chillId === 0) {
+      if (sparkleGroupRef.current) sparkleGroupRef.current.visible = false
+      if (umbrellaSpinRef.current) umbrellaSpinRef.current.rotation.z = 0
+      return
+    }
+    if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - tapTimeRef.current
+    if (umbrellaSpinRef.current) {
+      umbrellaSpinRef.current.rotation.z = age < 1.5 ? Math.sin((age / 1.5) * Math.PI) * 0.42 : 0
+    }
+    if (sparkleGroupRef.current) {
+      if (age < 1.6) {
+        const p = age / 1.6
+        const fade = Math.sin(p * Math.PI)
+        sparkleGroupRef.current.visible = true
+        sparkleGroupRef.current.children.forEach((child, idx) => {
+          const item = sparkleSeeds[idx]
+          const r = item.rad + p * 0.16
+          child.position.set(Math.cos(item.ang + age * 1.4) * r, Math.sin(item.ang + age * 1.4) * r, p * 0.26)
+          child.scale.setScalar(0.75 + fade * 0.7)
+        })
+      } else {
+        sparkleGroupRef.current.visible = false
+      }
+    }
+  })
+
   return (
-    <group position={[cx, cy, z]} rotation={[0, 0, facing]}>
-      <BeachUmbrella position={[0, -0.04, 0]} canopyTex={canopyTex} />
+    <group
+      position={[cx, cy, z]}
+      rotation={[0, 0, facing]}
+      onClick={
+        side === 1
+          ? (e) => {
+              if (!isTapEvent(e)) return
+              tapTimeRef.current = -1
+              setChillId((n) => n + 1)
+            }
+          : undefined
+      }
+      onPointerOver={
+        side === 1
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(true)
+            }
+          : undefined
+      }
+      onPointerOut={
+        side === 1
+          ? (e) => {
+              e.stopPropagation()
+              setPointerCursor(false)
+            }
+          : undefined
+      }
+    >
+      <group ref={umbrellaSpinRef}>
+        <BeachUmbrella position={[0, -0.04, 0]} canopyTex={canopyTex} />
+      </group>
+      {side === 1 && (
+        <group ref={sparkleGroupRef} position={[0, -0.04, 0.28]} visible={false}>
+          {sparkleSeeds.map((_, i) => (
+            <mesh key={i}>
+              <octahedronGeometry args={[0.016, 0]} />
+              <meshBasicMaterial color={i % 2 === 0 ? '#fde047' : '#bae6fd'} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {side === 1 && (
+        <SpeechBubble3D
+          text="🏖️ 吹吹海风，放松一下"
+          accent="#0ea5e9"
+          triggerId={chillId}
+          position={[0, -0.04, 0.7]}
+          scale={1.08}
+        />
+      )}
       {isMoon && side === 1 && (
         <group position={[0, -0.04, 0.28]}>
           {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -909,12 +997,17 @@ export function CoastDioramaCard({
         />
         <MbtiStandee
           mbti={profile.mbti}
+          avatarUrl={profile.avatarUrl}
+          avatarFrame={profile.avatarFrame}
+          name={profile.name}
+          greeting={profile.greeting}
           position={[-0.98, -0.06, THIN_T / 2 + coastSurfaceZ(-0.98, -0.06, spec, 1) + 0.01]}
           scale={1.05}
           rotZ={0.35}
         />
         <MicroAccessory
           accessory={profile.accessory}
+          greeting={profile.greeting}
           position={[-0.18, -0.65, THIN_T / 2 + coastSurfaceZ(-0.18, -0.65, spec, 1) + 0.012]}
           scale={0.95}
           rotZ={0.28}

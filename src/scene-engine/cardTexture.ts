@@ -7,6 +7,9 @@ export interface CardProfile {
   bio?: string
   mbti?: string
   accessory?: string
+  avatarUrl?: string
+  avatarFrame?: 'circle' | 'polaroid'
+  greeting?: string
   links?: { type: string; label: string; url: string }[]
 }
 

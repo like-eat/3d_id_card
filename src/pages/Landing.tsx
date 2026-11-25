@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { CardScene, hasWebGL, type ViewPreset } from '../scene-engine/CardScene'
 import { cloneSpec, templatePresets } from '../contracts/scene-spec'
 import { getMoodSkin, getMoodsForTemplate } from '../contracts/moods'
+import { makeSampleAvatarDataUrl } from '../lib/storage'
 import { useHashNavigate } from '../lib/nav'
 
 // 演示模板：?tpl=0..4 可切换（默认晨雾森林），?mood=<id> 可切皮肤，?bg=hex / ?tc=hex 可自定义配色
@@ -14,6 +15,7 @@ const initialView: ViewPreset =
 const cleanParam = params.get('clean') === '1'
 const mbtiParam = params.get('mbti') ?? 'ENFP'
 const accParam = params.get('acc')
+const demoAvatarParam = params.get('demoAvatar')
 const bgParamRaw = params.get('bg')
 const tcParamRaw = params.get('tc')
 const initialBg = bgParamRaw && /^[0-9a-fA-F]{6}$/.test(bgParamRaw) ? `#${bgParamRaw}` : undefined
@@ -51,16 +53,23 @@ export function LandingPage() {
     return s
   }, [currentTpl, activeMood, tplIdx])
 
+  const demoAvatarUrl = useMemo(
+    () => (demoAvatarParam === 'circle' || demoAvatarParam === 'polaroid' ? makeSampleAvatarDataUrl() : undefined),
+    [],
+  )
+
   const demoProfile = useMemo(
     () => ({
       name: 'Zilin',
       title: 'Creative Director',
       bio: '用微缩世界讲述个人故事，探索数字名片的质感边界。',
       mbti: mbtiParam || undefined,
+      avatarUrl: demoAvatarUrl,
+      avatarFrame: (demoAvatarParam === 'polaroid' ? 'polaroid' : 'circle') as 'circle' | 'polaroid',
       accessory: accParam === '' ? undefined : accParam || DEFAULT_TPL_ACCESSORIES[tplIdx] || 'cat',
       links: BASE_DEMO_LINKS,
     }),
-    [tplIdx],
+    [tplIdx, demoAvatarUrl],
   )
 
   return (
@@ -137,7 +146,7 @@ export function LandingPage() {
               </button>
             ))}
           </div>
-          <div className="dock-hint">拖动画面可 360° 旋转 · 滚轮缩放预览</div>
+          <div className="dock-hint">拖动画面可 360° 旋转 · 点击立牌/宠物/场景有互动彩蛋 · 滚轮缩放预览</div>
         </div>
       </main>
     </div>

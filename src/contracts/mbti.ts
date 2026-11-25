@@ -39,3 +39,27 @@ export function getMbtiInfo(code?: string | null): MbtiInfo | null {
   const upper = code.trim().toUpperCase()
   return MBTI_LIST.find((m) => m.code === upper) ?? null
 }
+
+const MBTI_QUOTES: Record<string, string> = {
+  INTJ: '一切尽在计划中 ♟️',
+  INTP: '好奇心永不打烊 🔬',
+  ENTJ: '把愿景变成现实 ⚡',
+  ENTP: '脑洞多到装不下 💡',
+  INFJ: '洞察人心的小宇宙 🔮',
+  INFP: '温柔而坚定地做梦 🌸',
+  ENFJ: '点亮身边的每个人 ✨',
+  ENFP: '脑洞永远在线 🎉',
+  ISTJ: '稳稳当当交付到底 🛡️',
+  ISFJ: '把细节照顾到极致 🌿',
+  ESTJ: '高效推进每一件事 📋',
+  ESFJ: '用心链接每一位朋友 🤝',
+  ISTP: '冷静拆解万事万物 🔧',
+  ISFP: '在光影里捕捉美好 🎨',
+  ESTP: '立刻行动就是答案 🚀',
+  ESFP: '有我的地方就有光芒 🌟',
+}
+
+export function getMbtiQuote(code?: string | null): string {
+  if (!code) return '👋 很高兴认识你！'
+  return MBTI_QUOTES[code.trim().toUpperCase()] ?? '👋 很高兴认识你！'
+}

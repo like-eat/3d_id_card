@@ -19,6 +19,9 @@ export interface ProfileData {
   bio: string
   mbti?: string
   accessory?: string
+  avatarUrl?: string
+  avatarFrame?: 'circle' | 'polaroid'
+  greeting?: string
   website?: string
   links: { type: string; label: string; url: string }[]
   photoCount: number

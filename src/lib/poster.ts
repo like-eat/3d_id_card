@@ -210,23 +210,46 @@ export async function generateSharePoster(opts: PosterOptions): Promise<string> 
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 36)
   ctx.stroke()
 
-  // 左侧文字区域
+  // 左侧文字区域（若有自定义头像则前置圆形头像框）
   const infoX = cardX + 56
   const infoMaxW = 520
   let curY = cardY + 86
+
+  const avatarImg = opts.profile.avatarUrl ? await loadImage(opts.profile.avatarUrl) : null
+  const textStartX = avatarImg ? infoX + 106 : infoX
+  const textMaxW = avatarImg ? infoMaxW - 106 : infoMaxW
+
+  if (avatarImg) {
+    const ax = infoX + 44
+    const ay = cardY + 76
+    const ar = 44
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(ax, ay, ar, 0, Math.PI * 2)
+    ctx.closePath()
+    ctx.clip()
+    ctx.drawImage(avatarImg, ax - ar, ay - ar, ar * 2, ar * 2)
+    ctx.restore()
+
+    ctx.strokeStyle = theme.accent
+    ctx.lineWidth = 3.5
+    ctx.beginPath()
+    ctx.arc(ax, ay, ar + 2, 0, Math.PI * 2)
+    ctx.stroke()
+  }
 
   const name = (opts.profile.name || '我的 3D 名片').slice(0, 18)
   const nameSize = name.length > 8 ? 50 : 62
   ctx.fillStyle = theme.titleColor
   ctx.font = `800 ${nameSize}px "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif`
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText(name, infoX, curY, infoMaxW)
+  ctx.fillText(name, textStartX, curY, textMaxW)
   curY += 54
 
   const title = (opts.profile.title || '3D 数字名片创作者').slice(0, 28)
   ctx.fillStyle = theme.accent
   ctx.font = '600 32px "PingFang SC", "Microsoft YaHei", sans-serif'
-  ctx.fillText(title, infoX, curY, infoMaxW)
+  ctx.fillText(title, textStartX, curY, textMaxW)
   curY += 42
 
   // MBTI + 微缩挂件胶囊徽章

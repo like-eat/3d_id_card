@@ -20,6 +20,7 @@ import { SceneErrorBoundary } from '../scene-engine/SceneErrorBoundary'
 import { errorMessage, withRetry } from '../lib/cloud'
 import { withShareCode } from '../lib/share'
 import { downloadDataUrl, generateSharePoster } from '../lib/poster'
+import { cropAvatarDataUrl, makeSampleAvatarDataUrl } from '../lib/storage'
 
 const DRAFT_KEY = 'card-draft-v1'
 
@@ -69,6 +70,9 @@ interface DraftForm {
   title: string
   bio: string
   mbti: string
+  avatarUrl: string
+  avatarFrame: 'circle' | 'polaroid'
+  greeting: string
   accessory: string
   website: string
   links: LinkItem[]
@@ -312,8 +316,26 @@ function Editor() {
   const [form, setForm] = useState<DraftForm>(() => {
     const saved = loadDraft()
     return saved
-      ? { ...saved, mbti: saved.mbti ?? '', accessory: saved.accessory ?? '' }
-      : { name: '', title: '', bio: '', mbti: '', accessory: '', website: '', links: [] }
+      ? {
+          ...saved,
+          mbti: saved.mbti ?? '',
+          avatarUrl: saved.avatarUrl ?? '',
+          avatarFrame: saved.avatarFrame === 'polaroid' ? 'polaroid' : 'circle',
+          greeting: saved.greeting ?? '',
+          accessory: saved.accessory ?? '',
+        }
+      : {
+          name: '',
+          title: '',
+          bio: '',
+          mbti: '',
+          avatarUrl: '',
+          avatarFrame: 'circle',
+          greeting: '',
+          accessory: '',
+          website: '',
+          links: [],
+        }
   })
   const [initialSetup] = useState(() => makeInitialSpec())
   const [activeTab, setActiveTab] = useState<EditorTab>('template')
@@ -335,7 +357,11 @@ function Editor() {
 
   // 表单草稿恢复（US-002）
   useEffect(() => {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(form))
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(form))
+    } catch {
+      // ignore storage quota errors on large cropped avatars
+    }
   }, [form])
 
   // 仅在已登录时拉取账号下的名片草稿
@@ -373,6 +399,9 @@ function Editor() {
         title: p.title ?? '',
         bio: p.bio ?? '',
         mbti: p.mbti ?? '',
+        avatarUrl: p.avatarUrl ?? '',
+        avatarFrame: p.avatarFrame === 'polaroid' ? 'polaroid' : 'circle',
+        greeting: p.greeting ?? '',
         accessory: p.accessory ?? '',
         website: p.website ?? '',
         links: p.links ?? [],
@@ -396,10 +425,13 @@ function Editor() {
       title: form.title.trim(),
       bio: form.bio.trim(),
       mbti: form.mbti || undefined,
+      avatarUrl: form.avatarUrl || undefined,
+      avatarFrame: form.avatarUrl ? form.avatarFrame : undefined,
+      greeting: form.greeting.trim() || undefined,
       accessory: form.accessory || undefined,
       website: form.website.trim() || undefined,
       links: form.links.filter((l) => l.url.trim()).map(normalizeLink),
-      photoCount: 0,
+      photoCount: form.avatarUrl ? 1 : 0,
     }
   }
 
@@ -554,6 +586,9 @@ function Editor() {
       title: form.title.trim(),
       bio: form.bio.trim(),
       mbti: form.mbti || undefined,
+      avatarUrl: form.avatarUrl || undefined,
+      avatarFrame: form.avatarUrl ? form.avatarFrame : undefined,
+      greeting: form.greeting.trim() || undefined,
       accessory: form.accessory || undefined,
       links: form.links.filter((l) => l.url.trim()).map(normalizeLink),
     }),
@@ -696,6 +731,85 @@ function Editor() {
                 <div className="field">
                   <label>一句话简介（≤160 字符）</label>
                   <textarea value={form.bio} maxLength={160} rows={2} placeholder="介绍你自己" onChange={(e) => setForm({ ...form, bio: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>自定义头像 / 照片立牌（可选，上传后优先替掉 MBTI 立牌）</label>
+                  <div className="avatar-panel">
+                    {form.avatarUrl ? (
+                      <img
+                        className={form.avatarFrame === 'polaroid' ? 'avatar-preview polaroid' : 'avatar-preview'}
+                        src={form.avatarUrl}
+                        alt="自定义头像"
+                      />
+                    ) : (
+                      <div className={form.avatarFrame === 'polaroid' ? 'avatar-preview polaroid' : 'avatar-preview'}>
+                        🖼️
+                      </div>
+                    )}
+                    <div className="avatar-controls">
+                      <div className="avatar-actions">
+                        <label className="avatar-upload-btn">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            hidden
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ''
+                              if (!file) return
+                              try {
+                                const cropped = await cropAvatarDataUrl(file)
+                                setForm((f) => ({ ...f, avatarUrl: cropped }))
+                                setNotice({ kind: 'info', text: '已裁剪并生成 3D 照片立牌！可在右侧点击立牌触发气泡。' })
+                              } catch (err) {
+                                setNotice({ kind: 'error', text: err instanceof Error ? err.message : '头像处理失败' })
+                              }
+                            }}
+                          />
+                          📤 上传照片
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f, avatarUrl: makeSampleAvatarDataUrl() }))
+                            setNotice({ kind: 'info', text: '已加载示例头像立牌，可切换圆框 / 拍立得相框。' })
+                          }}
+                        >
+                          ✨ 试示例照片
+                        </button>
+                        {form.avatarUrl && (
+                          <button type="button" onClick={() => setForm((f) => ({ ...f, avatarUrl: '' }))}>
+                            清除
+                          </button>
+                        )}
+                      </div>
+                      <div className="avatar-frames">
+                        <button
+                          type="button"
+                          className={form.avatarFrame === 'circle' ? 'frame-chip active' : 'frame-chip'}
+                          onClick={() => setForm((f) => ({ ...f, avatarFrame: 'circle' }))}
+                        >
+                          ⭕ 金属圆框
+                        </button>
+                        <button
+                          type="button"
+                          className={form.avatarFrame === 'polaroid' ? 'frame-chip active' : 'frame-chip'}
+                          onClick={() => setForm((f) => ({ ...f, avatarFrame: 'polaroid' }))}
+                        >
+                          📸 拍立得相框
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>彩蛋打招呼语（可选，≤24 字，点击 3D 立牌/宠物时弹出）</label>
+                  <input
+                    value={form.greeting}
+                    maxLength={24}
+                    placeholder="如：嗨，很高兴认识你！☕"
+                    onChange={(e) => setForm({ ...form, greeting: e.target.value })}
+                  />
                 </div>
                 <div className="field">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1075,7 +1189,7 @@ function Editor() {
                   </div>
                 )}
               </div>
-              <div className="stage-tip">拖动旋转 · 翻到背面查看二维码与资料</div>
+              <div className="stage-tip">拖动旋转 · 点击角色/动物/主景触发互动彩蛋 · 翻看背面二维码</div>
             </>
           ) : (
             <div className="loading-screen">

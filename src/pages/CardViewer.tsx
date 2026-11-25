@@ -299,6 +299,9 @@ export function CardViewerPage({ slug }: { slug: string }) {
     title: profile.title,
     bio: profile.bio,
     mbti: profile.mbti,
+    avatarUrl: profile.avatarUrl,
+    avatarFrame: profile.avatarFrame,
+    greeting: profile.greeting,
     accessory: profile.accessory,
     links: profile.links ?? [],
   }
@@ -320,8 +323,15 @@ export function CardViewerPage({ slug }: { slug: string }) {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="intro">
-        <h1>{profile.name}</h1>
-        <p>{profile.title}</p>
+        <div className="intro-head">
+          {profile.avatarUrl && (
+            <img className="viewer-avatar" src={profile.avatarUrl} alt={profile.name} />
+          )}
+          <div>
+            <h1>{profile.name}</h1>
+            <p>{profile.title}</p>
+          </div>
+        </div>
         {(mbtiInfo || accInfo) && (
           <div className="viewer-badges">
             {mbtiInfo && (
@@ -398,7 +408,7 @@ export function CardViewerPage({ slug }: { slug: string }) {
         )}
       </div>
       {hintShown && hasWebgl && (
-        <div className="stage-tip">拖动查看世界 · 点右上「翻看背面」查看二维码</div>
+        <div className="stage-tip">拖动查看世界 · 点击角色/动物/主景触发互动彩蛋 · 点右上「翻看背面」</div>
       )}
       <div className="links">
         {wechatLinks.map((l, i) => (

@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import QRCode from 'qrcode'
 import type { SceneSpec } from '../contracts/scene-spec'
@@ -7,6 +7,7 @@ import { makeHexVariants, resolveSceneTheme } from '../contracts/moods'
 import type { CardProfile } from './cardTexture'
 import { MbtiStandee } from './MbtiStandee'
 import { MicroAccessory } from './MicroAccessory'
+import { isTapEvent, setPointerCursor, SpeechBubble3D } from './SpeechBubble3D'
 import {
   fbm,
   makeLakeReflectionSkyTexture,
@@ -272,10 +273,117 @@ interface SakuraTreeDef {
   seed: number
 }
 
+/** 点击樱花树冠触发的 65 片樱吹雪迸发花瓣 */
+function SakuraBurstPetals({ triggerId, spec }: { triggerId: number; spec: SceneSpec }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const petalTex = useMemo(() => makeSakuraPetalTexture(), [])
+  useEffect(() => () => petalTex.dispose(), [petalTex])
+  const tapTimeRef = useRef(-99)
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+
+  const seeds = useMemo(() => {
+    const rnd = mulberry32(8841)
+    const anchors = [
+      [-0.72, 0.36, 0.52],
+      [0.9, 0.4, 0.48],
+      [-1.12, 0.1, 0.4],
+    ]
+    return Array.from({ length: 65 }, (_, i) => {
+      const a = anchors[i % anchors.length]
+      return {
+        ox: a[0] + (rnd() - 0.5) * 0.34,
+        oy: a[1] + (rnd() - 0.5) * 0.28,
+        oz: a[2] + (rnd() - 0.5) * 0.16,
+        vx: (rnd() - 0.5) * 0.72,
+        vy: (rnd() - 0.5) * 0.52,
+        vz: 0.15 + rnd() * 0.28,
+        spin: (rnd() - 0.5) * 6.5,
+        s: 0.95 + rnd() * 0.75,
+        ci: Math.floor(rnd() * 3),
+      }
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const palette = [new THREE.Color('#ffd0e1'), new THREE.Color('#ff9ebb'), new THREE.Color('#fff1f6')]
+    seeds.forEach((p, i) => mesh.setColorAt(i, palette[p.ci]))
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }, [seeds])
+
+  useEffect(() => {
+    if (triggerId > 0) tapTimeRef.current = -1
+  }, [triggerId])
+
+  useFrame(({ clock }) => {
+    const mesh = ref.current
+    if (!mesh) return
+    if (triggerId === 0) {
+      mesh.visible = false
+      return
+    }
+    if (tapTimeRef.current < 0) tapTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - tapTimeRef.current
+    if (age > 3.2) {
+      mesh.visible = false
+      return
+    }
+    mesh.visible = true
+    const p = age / 3.2
+    const scaleFade = Math.sin(Math.min(1, p * 1.15) * Math.PI)
+    for (let i = 0; i < seeds.length; i++) {
+      const s = seeds[i]
+      const x = s.ox + s.vx * age + Math.sin(age * 3.4 + i) * 0.08
+      const y = s.oy + s.vy * age + Math.cos(age * 2.9 + i) * 0.06
+      const z = Math.max(0.08, s.oz + s.vz * age - 0.24 * age * age)
+      dummy.position.set(x, y, z)
+      dummy.rotation.set(age * s.spin, age * 1.6, i + age * 2.2)
+      dummy.scale.setScalar(s.s * Math.max(0.05, scaleFade))
+      dummy.updateMatrix()
+      mesh.setMatrixAt(i, dummy.matrix)
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  const isNight = resolveSceneTheme(spec).mood.id === 'sakura_night'
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, seeds.length]} visible={false}>
+      <planeGeometry args={[0.032, 0.032]} />
+      <meshStandardMaterial
+        map={petalTex}
+        emissive={isNight ? '#ff9ec6' : '#ffb8d0'}
+        emissiveMap={petalTex}
+        emissiveIntensity={isNight ? 0.6 : 0.25}
+        alphaTest={0.22}
+        roughness={0.6}
+        side={THREE.DoubleSide}
+      />
+    </instancedMesh>
+  )
+}
+
 function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: SceneSpec; quality: Quality }) {
   const clusterRef = useRef<THREE.InstancedMesh>(null)
+  const swayRef = useRef<THREE.Group>(null)
+  const [burstId, setBurstId] = useState(0)
+  const burstTimeRef = useRef(-99)
   const clusterTex = useMemo(() => makeSakuraClusterTexture(), [])
   useEffect(() => () => clusterTex.dispose(), [clusterTex])
+  useEffect(() => () => setPointerCursor(false), [])
+
+  useFrame(({ clock }) => {
+    const grp = swayRef.current
+    if (!grp || side !== 1) return
+    if (burstId === 0) {
+      grp.rotation.z = 0
+      return
+    }
+    if (burstTimeRef.current < 0) burstTimeRef.current = clock.elapsedTime
+    const age = clock.elapsedTime - burstTimeRef.current
+    grp.rotation.z = age < 1.8 ? Math.sin(age * 24) * 0.038 * Math.exp(-age * 2.2) : 0
+  })
 
   const treeDefs: SakuraTreeDef[] = useMemo(() => {
     const all: SakuraTreeDef[] =
@@ -389,32 +497,71 @@ function RealisticSakuraTrees({ side, spec, quality }: { side: 1 | -1; spec: Sce
 
   return (
     <group>
-      {trunks.map((tr) => (
-        <group key={tr.key}>
-          <mesh geometry={tr.mainGeo} castShadow receiveShadow>
-            <meshStandardMaterial color={isNight ? '#332421' : '#4b352d'} roughness={0.9} />
-          </mesh>
-          <mesh geometry={tr.subGeo} castShadow receiveShadow>
-            <meshStandardMaterial color={isNight ? '#3d2a26' : '#573e34'} roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-      <instancedMesh
-        ref={clusterRef}
-        args={[cardGeo, undefined, trunks.length * cardsPerTree]}
-        castShadow
-        receiveShadow
+      <group
+        ref={swayRef}
+        onClick={
+          side === 1
+            ? (e) => {
+                if (!isTapEvent(e)) return
+                burstTimeRef.current = -1
+                setBurstId((n) => n + 1)
+              }
+            : undefined
+        }
+        onPointerOver={
+          side === 1
+            ? (e) => {
+                e.stopPropagation()
+                setPointerCursor(true)
+              }
+            : undefined
+        }
+        onPointerOut={
+          side === 1
+            ? (e) => {
+                e.stopPropagation()
+                setPointerCursor(false)
+              }
+            : undefined
+        }
       >
-        <meshStandardMaterial
-          map={clusterTex}
-          emissive={isNight ? '#ff9ec6' : isSunset ? '#ffae9c' : '#ffd6e5'}
-          emissiveMap={clusterTex}
-          emissiveIntensity={isNight ? 0.52 : isSunset ? 0.3 : 0.24}
-          alphaTest={0.28}
-          roughness={0.76}
-          side={THREE.DoubleSide}
+        {trunks.map((tr) => (
+          <group key={tr.key}>
+            <mesh geometry={tr.mainGeo} castShadow receiveShadow>
+              <meshStandardMaterial color={isNight ? '#332421' : '#4b352d'} roughness={0.9} />
+            </mesh>
+            <mesh geometry={tr.subGeo} castShadow receiveShadow>
+              <meshStandardMaterial color={isNight ? '#3d2a26' : '#573e34'} roughness={0.9} />
+            </mesh>
+          </group>
+        ))}
+        <instancedMesh
+          ref={clusterRef}
+          args={[cardGeo, undefined, trunks.length * cardsPerTree]}
+          castShadow
+          receiveShadow
+        >
+          <meshStandardMaterial
+            map={clusterTex}
+            emissive={isNight ? '#ff9ec6' : isSunset ? '#ffae9c' : '#ffd6e5'}
+            emissiveMap={clusterTex}
+            emissiveIntensity={isNight ? 0.52 : isSunset ? 0.3 : 0.24}
+            alphaTest={0.28}
+            roughness={0.76}
+            side={THREE.DoubleSide}
+          />
+        </instancedMesh>
+      </group>
+      {side === 1 && <SakuraBurstPetals triggerId={burstId} spec={spec} />}
+      {side === 1 && (
+        <SpeechBubble3D
+          text="🌸 樱吹雪 · 好运降临"
+          accent="#e06d94"
+          triggerId={burstId}
+          position={[-0.78, 0.42, THIN_T / 2 + 1.02]}
+          scale={1.1}
         />
-      </instancedMesh>
+      )}
     </group>
   )
 }
@@ -566,8 +713,13 @@ function SteppingStones({ side, spec }: { side: 1 | -1; spec: SceneSpec }) {
 function KoiPond({ spec }: { spec: SceneSpec }) {
   const matRef = useRef<THREE.ShaderMaterial>(null)
   const koiGroupRef = useRef<THREE.Group>(null)
+  const rippleRef = useRef<THREE.Mesh>(null)
+  const [rippleId, setRippleId] = useState(0)
+  const tapTimeRef = useRef(-99)
+  const koiPhaseRef = useRef(0)
   const skyTex = useMemo(() => makeLakeReflectionSkyTexture(), [])
   useEffect(() => () => skyTex.dispose(), [skyTex])
+  useEffect(() => () => setPointerCursor(false), [])
 
   const pondGeo = useMemo(() => {
     const shape = new THREE.Shape()
@@ -602,13 +754,34 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
     uniforms.uSunset.value = isSunset ? 1 : 0
   }, [uniforms, isNight, isSunset])
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime
+    let boost = 0
+    if (rippleId > 0) {
+      if (tapTimeRef.current < 0) tapTimeRef.current = t
+      const age = t - tapTimeRef.current
+      if (age < 2.5) boost = Math.max(0, 1 - age / 2.5)
+      if (rippleRef.current) {
+        if (age < 1.3) {
+          const rp = age / 1.3
+          rippleRef.current.visible = true
+          rippleRef.current.scale.setScalar(0.5 + rp * 4.4)
+          ;(rippleRef.current.material as THREE.MeshBasicMaterial).opacity = (1 - rp) * 0.72
+        } else {
+          rippleRef.current.visible = false
+        }
+      }
+    } else if (rippleRef.current) {
+      rippleRef.current.visible = false
+    }
+
+    koiPhaseRef.current += Math.min(delta, 0.05) * (1 + boost * 2.6)
+    const kt = koiPhaseRef.current
     if (matRef.current) matRef.current.uniforms.uTime.value = t
     if (koiGroupRef.current) {
       koiGroupRef.current.children.forEach((child, idx) => {
         const spd = 0.45 + idx * 0.14
-        const phase = t * spd + idx * 2.1
+        const phase = kt * spd + idx * 2.1
         const rx = 0.22 - idx * 0.03
         const ry = 0.14 - idx * 0.02
         const kx = Math.cos(phase) * rx
@@ -624,7 +797,22 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
   if (!spec.environment.water.enabled) return null
 
   return (
-    <group position={[POND_CX, POND_CY, THIN_T / 2 + 0.026]}>
+    <group
+      position={[POND_CX, POND_CY, THIN_T / 2 + 0.026]}
+      onClick={(e) => {
+        if (!isTapEvent(e)) return
+        tapTimeRef.current = -1
+        setRippleId((n) => n + 1)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setPointerCursor(true)
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation()
+        setPointerCursor(false)
+      }}
+    >
       {/* 半透明清澈青池水面 */}
       <mesh geometry={pondGeo}>
         <shaderMaterial
@@ -686,6 +874,18 @@ function KoiPond({ spec }: { spec: SceneSpec }) {
           </group>
         ))}
       </group>
+      {/* 扩散水波纹与锦鲤彩蛋气泡 */}
+      <mesh ref={rippleRef} position={[0, 0, 0.015]} visible={false}>
+        <ringGeometry args={[0.06, 0.085, 32]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <SpeechBubble3D
+        text="🎏 锦鲤护体，万事顺遂"
+        accent="#e86f52"
+        triggerId={rippleId}
+        position={[0, 0, 0.48]}
+        scale={1.06}
+      />
     </group>
   )
 }
@@ -1024,12 +1224,17 @@ export function SakuraDioramaCard({
         />
         <MbtiStandee
           mbti={profile.mbti}
+          avatarUrl={profile.avatarUrl}
+          avatarFrame={profile.avatarFrame}
+          name={profile.name}
+          greeting={profile.greeting}
           position={[-0.22, -0.02, THIN_T / 2 + sakuraSurfaceZ(-0.22, -0.02, spec, 1) + 0.04]}
           scale={1.06}
           rotZ={0.3}
         />
         <MicroAccessory
           accessory={profile.accessory}
+          greeting={profile.greeting}
           position={[0.52, -0.56, THIN_T / 2 + sakuraSurfaceZ(0.52, -0.56, spec, 1) + 0.025]}
           scale={1.0}
           rotZ={-0.22}
